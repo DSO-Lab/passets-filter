@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  filter-1:
+    build: .
+    image: passets-filter:1.0.0
+    container_name: passets-filter-1
+    environment:
+      - ELASTICSEARCH_HOST=<elasticsearch-host>:9200
+      - ELASTICSEARCH_INDEX=passets
+      - THREADS=20
+      - DEBUG=0
+
+
