@@ -7,19 +7,26 @@
 | 插件名     | 功能简介                           | 配置项
 |------------|------------------------------------|----------------------------------|
 | ip         | 计算IP数值，识别内网IP             | enable, index, inner_ips
+| geoip      | 识别IP地址的归属地、经纬度         | enable, index
 | wappalyzer | 识别HTTP类数据中的资产指纹信息     | enable, index
 | nmap       | 识别TCP类数据中的资产指纹信息      | enable, index
 | urlparse   | 拆分URL，识别站点、路径、路径模板  | enable, index
 
+> GEOIP 插件
+
+基于记录中的IP地址来识别其所属国家、城市以及经纬度。
+
+IP地址库基于 [GEOIP2](https://dev.maxmind.com/geoip/geoip2/geolite2/) 的数据库，使用前需下载最新的数据库。
+
 > Wappalyzer 插件
 
-基于 URL、HTTP 响应头、HTTP响应正文来识别站点指纹信息。
+基于数据中的 URL、HTTP 响应头、HTTP响应正文来识别站点指纹信息。
 
 指纹库及识别引擎基于 [Wappalyzer](https://github.com/AliasIO/Wappalyzer/) 修改。
 
 > NMAP 插件
 
-基于 TCP 响应报文来识别目标服务的指纹信息。
+基于数据中的 TCP 响应报文来识别目标服务的指纹信息。
 
 指纹库基于 [NMAP](https://github.com/nmap/nmap/) 项目中的 `nmap-service-probes` 指纹库。
 
@@ -36,6 +43,7 @@ src                      # 核心代码文件
   rules                  # 指纹规则库存放路径
     apps.json            # Wappalyzer Web 应用指纹库
     nmap-service-probes  # NMAP 端口服务指纹库
+    GeoLite2-City.mmdb   # IP归属地、经纬度数据库（需单独下载）
   wappalyzer             # Wappalyzer 主程序目录（基于 5.8.4 版本修改）
     ... ...
   main.py                # 主程序
@@ -45,6 +53,8 @@ src                      # 核心代码文件
 [最新Web应用指纹库下载](https://github.com/AliasIO/Wappalyzer/raw/master/src/apps.json)
 
 [最新端口服务指纹库下载](https://github.com/nmap/nmap/raw/master/nmap-service-probes)
+
+[最新IP数据库下载](https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz)
 
 ### 清洗程序执行说明
  

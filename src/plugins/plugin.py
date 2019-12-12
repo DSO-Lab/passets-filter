@@ -25,11 +25,10 @@ class Plugin(object):
     _config = None
     
     @staticmethod
-    def loadPluginsConfig(rootdir, debug=False):
+    def loadPluginsConfig(rootdir):
         """
         载入所有插件配置信息
         :param rootdir: 应用根目录
-        :param debug: 调试开关
         :return: 插件配置字典
         """
         fp = None
@@ -40,8 +39,9 @@ class Plugin(object):
             config = yaml.load(fp, Loader=yaml.SafeLoader)
             del(yaml)
             return config
-        except:
-            if debug: print('[-] ERROR:\n' + traceback.format_exc())
+        except Exception as e:
+            print('[-] ERROR: ' + str(e))
+            print(traceback.format_exc())
         finally:
             if fp: fp.close()
         return {}
@@ -60,7 +60,7 @@ class Plugin(object):
         # 将插件路径加入环境变量
         sys.path.insert(0, pluginPath)
         # 读取插件配置
-        pluginConfigs = Plugin.loadPluginsConfig(rootdir, debug)
+        pluginConfigs = Plugin.loadPluginsConfig(rootdir)
         
         plugins = {}
         for pluginName in pluginConfigs:
@@ -75,7 +75,7 @@ class Plugin(object):
             # 插件文件是否存在
             pluginFile = os.path.join(pluginPath, '{}.py'.format(pluginName))
             if not os.path.isfile(pluginFile):
-                if debug: print('[!] Failed to load plugin {}. file not found.'.format(pluginName))
+                print('[!] Failed to load plugin {}. file not found.'.format(pluginName))
                 continue
 
             # 插件加载
@@ -90,43 +90,12 @@ class Plugin(object):
                             if pluginConfigs[pluginName]:
                                 plugins[index][1].set_config(pluginConfigs[pluginName])
                         else:
-                            if debug: print('[!] `execute()` method not found in Plugin {}.'.format(pluginName))
+                            print('[!] `execute()` method not found in Plugin {}.'.format(pluginName))
                     else:
-                        if debug: print('[!] Invalid plugin {}'.format(pluginName))
+                        print('[!] Invalid plugin {}'.format(pluginName))
             except Exception as e:
-                if debug:
-                    print('[-] ERROR: {}'.format(str(e)))
-                    print('[-] ERROR: {}'.format(traceback.format_exc()))
-        # items = os.listdir(pluginPath)
-        # for item in items:
-        #     if os.path.isfile(os.path.join(pluginPath, item)):
-        #         if item.endswith('.py') and item not in ['__init__.py', 'plugin.py']:
-        #             moduleName = item[:-3]
-                    
-        #             try:
-        #                 module_spec = importlib.util.spec_from_file_location(moduleName, os.path.join(pluginPath, item))
-        #                 if module_spec:
-        #                     plugin = importlib.util.module_from_spec(module_spec)
-        #                     module_spec.loader.exec_module(plugin)
-        #                     if hasattr(plugin, 'FilterPlugin'):
-        #                         if hasattr(plugin.FilterPlugin, 'execute'):
-        #                             plugins[plugin.__name__] = plugin.FilterPlugin(rootdir, debug)
-        #                             if plugin.__name__ in pluginConfigs:
-        #                                 if debug: print('[!] Plugin config loaded:\n{}'.format(str(pluginConfigs[plugin.__name__])))
-        #                                 plugins[plugin.__name__].set_config(pluginConfigs[plugin.__name__])
-        #                         else:
-        #                             if debug: print('[!] `execute()` method not found in Plugin {}.'.format(plugin.__name__))
-        #                     else:
-        #                         if debug: print('[!] Invalid plugin {}'.format(plugin.__name__))
-        #             except Exception as e:
-        #                 if debug:
-        #                     print('[-] ERROR: {}'.format(str(e)))
-        #                     print('[-] ERROR: {}'.format(traceback.format_exc()))
-        
-        if debug:
-            print('[!] Loaded Plugins:')
-            for i in plugins:
-                print('[!] - {}'.format(plugins[i][0]))
+                print('[-] ERROR: {}'.format(str(e)))
+                print(traceback.format_exc())
         
         return plugins
 
@@ -160,7 +129,13 @@ class Plugin(object):
 
     def log(self, msg, level = 'INFO'):
         """日志输出"""
-        if self._debug: print('[!][{}][{}] {}'.format(level, self.__class__.__module__, msg))
+        if level == 'ERROR':
+            print('[-] ' + str(msg))
+        elif level == 'DEBUG':
+            if self._debug:
+                print('[D] ' + str(msg))
+        else:
+            print('[!] ' + str(msg))
 
     def set_config(self, config):
         """

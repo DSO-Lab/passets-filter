@@ -29,7 +29,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'HTTP':
-            self.log('Not http message.')
+            self.log('Not http message.', 'DEBUG')
             return None
 
         if 'url' not in msg and not isinstance(msg['url'], str):
@@ -49,9 +49,10 @@ class FilterPlugin(Plugin):
             if url_parts.netloc:
                 info['site'] = '{}://{}'.format(url_parts.scheme, url_parts.netloc)
             path = '/' if not url_parts.path else url_parts.path
-            path_tpl = ''
+            path_tpl = path
             if url_parts.query:
                 path += '?' + url_parts.query
+                path_tpl += '?'
                 params = parse.parse_qs(url_parts.query)
                 for _ in sorted(params):
                     path_tpl += '&{}={{}}'.format(_)
@@ -87,10 +88,11 @@ if __name__ == '__main__':
         "tag": "sensor-ens160"
     }
     msg_update = {}
-    for pluginName in sorted(plugins.keys()):
+    for i in sorted(plugins.keys()):
+        (pluginName, plugin) = plugins[i]
         if pluginName == 'url':
             print('[!] Plugin {} processing ...'.format(pluginName))
-            ret = plugins[pluginName].execute(msg)
+            ret = plugin.execute(msg)
             print(ret)
             if ret:
                 msg_update = dict(msg_update, **ret)

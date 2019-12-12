@@ -18,6 +18,11 @@ from plugin import Plugin
 class FilterPlugin(Plugin):
     """
     IP 处理插件
+    src: ip, port
+    dst:
+    - host: 服务
+    - ip_num: IP对应的数值
+    - inner: 内网标识，true为内网
     """
     
     def ip2num(self, ip):
@@ -41,9 +46,16 @@ class FilterPlugin(Plugin):
             self.log('ip field not found.')
             return None
 
+        if 'port' not in msg or not msg['port']:
+            self.log('port filed not found.')
+
         info = {
             'ip_num': 0, 'inner': False
         }
+        
+        if 'host' not in msg:
+            info['host'] = '{}:{}'.format(msg['ip'], msg['port'])
+
         # 计算IP的数值
         ip_num = self.ip2num(msg['ip'])
         if ip_num <= 0:
@@ -94,10 +106,11 @@ if __name__ == '__main__':
         "tag": "sensor-ens160"
     }
     msg_update = {}
-    for pluginName in sorted(plugins.keys()):
+    for i in sorted(plugins.keys()):
+        (pluginName, plugin) = plugins[i]
         if pluginName == 'ip':
             ctime = time.time()
-            ret = plugins[pluginName].execute(msg)
+            ret = plugin.execute(msg)
             etime = time.time()
             print('Eclipse time: {}'.format(etime-ctime))
             print(ret)

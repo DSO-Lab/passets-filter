@@ -18,63 +18,12 @@ import threading
 
 from plugin import Plugin
 
-nmapLock = None
-nmapFinger = None
-
-class NmapThread(threading.Thread):
-    """
-    TCP 指纹识别线程
-    """
-    def __init__(self, data, rules, debug):
-        """
-        构造函数
-        :param data: 要识别的TCP响应报文原始数据
-        :param rules: 指纹规则集
-        :param debug: 调试信息输出开关
-        """
-        super().__init__()
-        self._data = data
-        self._rules = rules
-        self._debug = debug
-    
-    def run(self):
-        """线程主函数"""
-        global nmapFinger
-
-        for rule in self._rules:
-            if nmapFinger: return
-            try:
-                m = re.match(rule['m'], self._data, rule['mf'])
-                if m:
-                    result = {
-                        'name': rule['p'],
-                        'version': rule['v'],
-                        'info': rule['i'],
-                        'os': rule['o'],
-                        'device': rule['d'],
-                        'service': rule['s']
-                    }
-                    if m.lastindex:
-                        for i in range(m.lastindex + 1):
-                            skey = '${}'.format(i)
-                            for k in result:
-                                if not result[k]: continue
-
-                                if skey in result[k]:
-                                    result[k] = result[k].replace(skey, m.group(i))
-                    
-                    nmapLock.acquire()
-                    nmapFinger = result
-                    nmapLock.release()
-                    break
-            except:
-                if self._debug: print('[-] ERROR:\n' + traceback.format_exc())
-
-
-
 class FilterPlugin(Plugin):
     """
     TCP 指纹识别插件
+    src: data
+    dst:
+    - apps: 指纹信息，格式: [{name,version,os,device,info,service},...]
     """
     
     def __init__(self, rootdir, debug = False):
@@ -154,51 +103,44 @@ class FilterPlugin(Plugin):
             
             self.rules.append(rule)
 
-        self.log('{} rules loaded.'.format(len(self.rules)))
-   
+        self._ruleCount = len(self.rules)
+
     def analyze(self, data):
         """
         分析获取指纹
         :param data: TCP响应数据包
         :return: 指纹列表，例如：[{'name':'XXX','version':'XXX',...}]
         """
-        global nmapFinger, nmapLock
-        nmapFinger = None
-        nmapLock = threading.Lock()
+        result = None
+        for rule in self.rules:
+            try:
+                m = re.match(rule['m'], data, rule['mf'])
+                if m:
+                    result = {
+                        'name': rule['p'],
+                        'version': rule['v'],
+                        'info': rule['i'],
+                        'os': rule['o'],
+                        'device': rule['d'],
+                        'service': rule['s']
+                    }
+                    if m.lastindex:
+                        for i in range(m.lastindex + 1):
+                            skey = '${}'.format(i)
+                            for k in result:
+                                if not result[k]: continue
 
-        pos = 0
-        # 由于任务处理以CPU运算为主，多线程反而会更慢，故将线程调整为1，单批规则数量最大
-        maxThreadCount = 1
-        maxBatchRuleCount = 50000
-
-        threadList = [None for i in range(maxThreadCount)]
-        while True:
-            isBreak = False
-            for i in range(maxThreadCount):
-                if threadList[i] and threadList[i].isAlive():
-                    continue
-
-                thread_rules = self.rules[pos: pos + maxBatchRuleCount]
-                threadList[i] = NmapThread(data, thread_rules, self._debug)
-                threadList[i].start()
-
-                if len(thread_rules) < maxBatchRuleCount:
-                    isBreak = True
+                                if skey in result[k]:
+                                    result[k] = result[k].replace(skey, m.group(i))
+                    
                     break
-
-                pos += maxBatchRuleCount
-            
-            if isBreak: break
-
-            time.sleep(0.02)
+            except Exception as e:
+                self.log(e, 'ERROR')
+                self.log(traceback.format_exc(), 'ERROR')
         
-        for i in range(maxThreadCount):
-            if threadList[i] and threadList[i].isAlive():
-                threadList[i].join()
-
-        if nmapFinger: return [ nmapFinger ]
-
-        return []
+        if result:
+            return [ result ]
+        return None
 
     def execute(self, msg):
         """
@@ -207,7 +149,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'TCP':
-            self.log('Not tcp message.')
+            self.log('Not tcp message.', 'DEBUG')
             return
 
         info = {}
@@ -236,16 +178,20 @@ if __name__ == '__main__':
         #"data": "3e494e464f3a4f70656e56504e204d616e6167656d656e7420496e746572666163652056657273696f6e20312e302e31202d2d2074797065202768656c702720666f72206d6f726520696e666f0d0a3e",
 
         # Example: get_info: plugins\nRPRT 0\nasfdsafasfsafas
-        "data": "6765745f696e666f3a20706c7567696e730a5250525420300a617366647361666173667361666173",
+        #"data": "6765745f696e666f3a20706c7567696e730a5250525420300a617366647361666173667361666173",
+
+        "data": '16030300d0010000cc03035df0c691b795581015d570c868b701ed1784528e488e9aeec4b37dad521e2de4202332000016299b175b8f0ad21daeb83a03eb5d47b57bb60ecfbd10bcd67a101d0026c02cc02bc030c02fc024c023c028c027c00ac009c014c013009d009c003d003c0035002f000a0100005d00000019001700001461637469766974792e77696e646f77732e636f6d000500050100000000000a00080006001d00170018000b00020100000d001400120401050102010403050302030202060106030023000000170000ff01000100',
 
         "inner": False,
         "tag": "sensor-ens160"
     }
     msg_update = {}
-    for pluginName in sorted(plugins.keys()):
+    for i in sorted(plugins.keys()):
+        (pluginName, plugin) = plugins[i]
         if pluginName == 'nmap':
+            print('[!] Plugin {} processing ...'.format(pluginName))
             ctime = time.time()
-            ret = plugins[pluginName].execute(msg)
+            ret = plugin.execute(msg)
             etime = time.time()
             print('Eclipse time: {}'.format(etime-ctime))
             print(ret)

@@ -1,3 +1,4 @@
 elasticsearch==7.1.0
 pyaml
 cacheout
+geoip2

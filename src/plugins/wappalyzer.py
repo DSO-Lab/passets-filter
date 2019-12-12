@@ -19,6 +19,11 @@ from plugin import Plugin
 class FilterPlugin(Plugin):
     """
     Web 指纹识别插件
+    src: url, header, body
+    dst:
+    - apps: 应用指纹，格式：[{name,version,confidence},...]
+    - title: 网页标题
+
     """
     
     def __init__(self, rootdir, debug = False):
@@ -57,7 +62,7 @@ class FilterPlugin(Plugin):
         else:
             cmd += '""'
         #print(cmd)
-        self.log('CMD: ' + cmd)
+        self.log('CMD: ' + cmd, 'DEBUG')
 
         try:
             fd = os.popen(cmd)
@@ -65,7 +70,7 @@ class FilterPlugin(Plugin):
 
             try:
                 result = json.loads(data)
-                self.log(result)
+                self.log(result, 'DEBUG')
                 if 'applications' in result:
                     for i in range(len(result['applications'])):
                         if 'product' in result['applications'][i]:
@@ -75,6 +80,7 @@ class FilterPlugin(Plugin):
                     return result['applications']
             except:
                 self.log(traceback.format_exc(), level='ERROR')
+                self.log(data, level='ERROR')
             
             fd.close()
         except Exception as e:
@@ -109,7 +115,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'HTTP':
-            self.log('Not http message.')
+            self.log('Not http message.', 'DEBUG')
             return
 
         info = {}
@@ -161,8 +167,10 @@ if __name__ == '__main__':
         "tag": "sensor-ens160"
     }
     msg_update = {}
-    for pluginName in sorted(plugins.keys()):
+    for i in sorted(plugins.keys()):
+        (pluginName, plugin) = plugins[i]
         if pluginName == 'wappalyzer':
+            print('[!] Plugin {} processing ...'.format(pluginName))
             ctime = time.time()
             ret = plugins[pluginName].execute(msg)
             etime = time.time()
