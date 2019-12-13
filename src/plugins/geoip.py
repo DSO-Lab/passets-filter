@@ -22,7 +22,7 @@ class FilterPlugin(Plugin):
     - country: 国家
     - city: 城市
     - location: 位置
-      - lng: 经度
+      - lon: 经度
       - lat: 纬度
     """
     def __init__(self, rootdir, debug = False):
@@ -49,19 +49,19 @@ class FilterPlugin(Plugin):
             self.log('ip field not found.', 'DEBUG')
             return None
 
-        info = {}
+        info = { 'geo': {} }
         try:
             resp = self._geoip.city(msg['ip'])
-            info['city'] = resp.city.name
-            info['country'] = resp.country.name
-            if info['country'] in ['香港', '澳门', '台湾']:
-                info['country'] = '中国' + info['country']
-            if info['country'] == '中华民国':
-                info['country'] = '中国台湾'
+            info['geo']['city'] = resp.city.name
+            info['geo']['country'] = resp.country.name
+            if info['geo']['country'] in ['香港', '澳门', '台湾']:
+                info['geo']['country'] = '中国' + info['geo']['country']
+            if info['geo']['country'] == '中华民国':
+                info['geo']['country'] = '中国台湾'
 
-            info['location'] = {
+            info['geo']['location'] = {
                 'lat': resp.location.latitude,
-                'lng': resp.location.longitude
+                'lon': resp.location.longitude
             }
         except Exception as e:
             self.log(e, 'DEBUG')

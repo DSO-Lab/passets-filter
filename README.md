@@ -1,36 +1,29 @@
 # Passets 被动资产识别框架数据清洗模块
 
-### 简介
+## 简介
 
-本模块主要用于对收集的被动资产原始数据进行二次加工，所有的加工都采用插件的方式进行，目前已经完善了以下插件。
+本模块主要用于对收集的被动资产原始数据进行二次加工，所有的加工都采用插件的方式进行，目前已支持以下插件。
 
 | 插件名     | 功能简介                           | 配置项
 |------------|------------------------------------|----------------------------------|
 | ip         | 计算IP数值，识别内网IP             | enable, index, inner_ips
-| geoip      | 识别IP地址的归属地、经纬度         | enable, index
 | wappalyzer | 识别HTTP类数据中的资产指纹信息     | enable, index
 | nmap       | 识别TCP类数据中的资产指纹信息      | enable, index
 | urlparse   | 拆分URL，识别站点、路径、路径模板  | enable, index
 
-> GEOIP 插件
-
-基于记录中的IP地址来识别其所属国家、城市以及经纬度。
-
-IP地址库基于 [GEOIP2](https://dev.maxmind.com/geoip/geoip2/geolite2/) 的数据库，使用前需下载最新的数据库。
-
-> Wappalyzer 插件
+### Wappalyzer 插件
 
 基于数据中的 URL、HTTP 响应头、HTTP响应正文来识别站点指纹信息。
 
 指纹库及识别引擎基于 [Wappalyzer](https://github.com/AliasIO/Wappalyzer/) 修改。
 
-> NMAP 插件
+### NMAP 插件
 
 基于数据中的 TCP 响应报文来识别目标服务的指纹信息。
 
 指纹库基于 [NMAP](https://github.com/nmap/nmap/) 项目中的 `nmap-service-probes` 指纹库。
 
-### 文件说明
+## 文件说明
 
 ```
 Dockerfile               # 容器环境配置文件
@@ -43,7 +36,6 @@ src                      # 核心代码文件
   rules                  # 指纹规则库存放路径
     apps.json            # Wappalyzer Web 应用指纹库
     nmap-service-probes  # NMAP 端口服务指纹库
-    GeoLite2-City.mmdb   # IP归属地、经纬度数据库（需单独下载）
   wappalyzer             # Wappalyzer 主程序目录（基于 5.8.4 版本修改）
     ... ...
   main.py                # 主程序
@@ -54,9 +46,7 @@ src                      # 核心代码文件
 
 [最新端口服务指纹库下载](https://github.com/nmap/nmap/raw/master/nmap-service-probes)
 
-[最新IP数据库下载](https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz)
-
-### 清洗程序执行说明
+## 清洗程序执行说明
  
 清洗程序是一个基于 Python3 开发的脚本应用程序。
 
@@ -74,18 +64,18 @@ OPTIONS:
   -d DEBUG, --debug=DEBUG       调试信息开关，0-关闭，1-开启
 ```
 
-使用示例：
+**使用示例：**
 
 ```
 # 并发10个线程处理 192.168.1.2:9200 中 passets 索引下的数据，执行过程输出调试信息
 python3 main.py -H 192.168.1.2:9200 -i passets -t 10 -d 1
 ```
 
-### 清洗程序配置说明
+## 清洗程序配置说明
 
 配置文件路径为 `config/plugin.yml`。
 
-配置实例：
+**配置示例：**
 ```
 ip:                                 # 插件名称（必须跟插件脚本文件名一致）
   enable: true                      # 插件是否启用，true为启用
@@ -111,9 +101,9 @@ nmap:
 ```
 
 
-### 容器化部署说明
+## 容器化部署说明
 
-#### 容器构建
+### 容器构建
 
 Dockerfile:
 ```
@@ -187,3 +177,6 @@ docker run -it passets-filter:<tag> -v ./config/plugin.yml:/opt/filter/config/pl
 docker-compose up -d
 ```
 
+## 自定义数据清洗插件
+
+详见 [插件开发说明](PLUGIN_DEVELOP.md) 。
