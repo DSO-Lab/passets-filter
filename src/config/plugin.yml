@@ -5,7 +5,7 @@
 # - index: 插件的处理顺序，0以上的整数，数值越小
 
 ip:
-  enable: true
+  enable: false
   index: 1
   inner_ips:
     - 10.0.0.0-10.255.255.255
@@ -19,7 +19,7 @@ geoip:
   index: 2
 
 url:
-  enable: true
+  enable: false
   index: 3
 
 wappalyzer:

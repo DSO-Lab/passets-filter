@@ -19,15 +19,14 @@ import threading
 import copy
 
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import ConnectionError, ConflictError
 from cacheout import Cache
 from plugins import Plugin
 
 threadLock = None
 threadExit = False
-es = None
 debug = False
 cache = None
-processCount = 0
 pluginInstances = []
 
 class MsgState:
@@ -45,12 +44,9 @@ def output(msg, level='INFO'):
     if level == 'ERROR':
         print('[-] ' + str(msg))
     elif level == 'DEBUG':
-        if debug:
-            print('[D] ' + str(msg))
+        if debug: print('[D] ' + str(msg))
     else:
         print('[!] ' + str(msg))
-    
-        
 
 def search(es, index, last_time='15m', size=10):
     """
@@ -73,12 +69,20 @@ def search(es, index, last_time='15m', size=10):
                     {'exists': {'field': 'state'}}
                 ]
             }
+        },
+        "sort": {
+            "@timestamp": {
+                "order": "desc"
+            }
         }
     }
     try:
         ret = es.search(index=index, body=query)
         output(ret, 'DEBUG')
         return ret['hits']['hits']
+    except ConnectionError:
+        output("ES connect error.", 'ERROR')
+        sys.exit(1)
     except Exception as e:
         output(e, 'ERROR')
 
@@ -98,6 +102,11 @@ def update(es, index, id, info):
         output(ret, 'DEBUG')
         if ret and 'result' in ret and ret['result'] == 'updated':
             return True
+    except ConnectionError:
+        output("ES connect error.", 'ERROR')
+        sys.exit(1)
+    except ConflictError:
+        output("ES doc update conflict.", 'ERROR')
     except Exception as e:
         output(e, 'ERROR')
     return False
@@ -117,11 +126,9 @@ def updateState(es, index, id, state):
                 'must': {
                     'term':{ '_id': id }
                 },
-                #'script': {
                 'must_not': [
                     {'exists': {'field': 'state'}}
                 ]
-                #}
             }
         },
         'script': {
@@ -133,95 +140,74 @@ def updateState(es, index, id, state):
         }
     }
     try:
+        output(query, 'DEBUG')
         ret = es.update_by_query(index=index, body=query)
         output(ret, 'DEBUG')
         if ret and 'updated' in ret and ret['updated'] > 0:
             return True
+    except ConnectionError:
+        output("ES connect error.", 'ERROR')
+        sys.exit(1)
+    except ConflictError:
+        output("ES doc update conflict.", 'ERROR')
     except Exception as e:
         output(e, 'ERROR')
     return False
 
-def filter(pos, index, msg, plugins):
+def filter(pos, options, msg_id, host_flag, msg, plugins):
     """
     数据处理线程
-    :param index: ES 索引名
+    :param options: 命令行参数对象
+    :param msg_id: 消息ID
+    :param host_flag: 应用缓存标识
     :param msg: 要过滤的数据
     :param plugins: 过滤插件列表
     """
-    global es, cache, processCount, threadExit, threadLock
+    global cache, threadLock
 
-    try:
-        # 检测退出
-        if threadExit: return
+    output('Starting thread {} ...'.format(pos), 'DEBUG')
 
-        msg_id = msg['_id']
-        msg = msg['_source']
+    msg_update = {}
+    es = Elasticsearch(hosts=options.hosts)
 
-        if 'ip' not in msg or 'port' not in msg or 'pro' not in msg:
-            return
+    # 先将数据更新为正在处理状态，避免被其它节点重复处理
+    # state: 0-处理中， 1-已完成，若无此参数表示尚未处理
+    ret = updateState(es, options.index, msg_id, MsgState.PROGRESSING)
+    if not ret:
+        output('Processed by other instance, _id={}, exit.'.format(msg_id))
+        return
+    
+    # 按插件顺序对数据进行处理（插件顺序在配置文件中定义）
+    for i in sorted(plugins.keys()):
+        (pluginName, plugin) = plugins[i]
+        output('Plugin {} processing ...'.format(pluginName), 'DEBUG')
 
-        msg_flag = '{}:{}'.format(msg['ip'], msg['port'])
-        if msg['pro'] == 'HTTP':
-            msg_flag = msg['url']
+        try:
+            ret = plugin.execute(msg)
+            if ret:
+                msg_update = dict(msg_update, **ret)
+                msg = dict(msg, **ret)
+        except:
+            output(traceback.format_exc(), 'ERROR')
+        
+        output('Plugin {} completed.'.format(pluginName), 'DEBUG')
+    
+    # 更新数据
+    msg_update['state'] = MsgState.COMPLETED
 
-        # 检查缓存，缓存里面有的不重复处理
-        threadLock.acquire()
-        processCount += 1
-        cacheMsg = cache.get(msg_flag)
-        threadLock.release()
-        if cacheMsg:
-            # output(cacheMsg, 'DEBUG')
+    ret = update(es, options.index, msg_id, msg_update)
+    if ret:
+        # 插入缓存
+        try:
             threadLock.acquire()
-            ret = update(es, index, msg_id, cacheMsg)
+            cache.set(host_flag, msg_update)
+        except Exception as e:
+            output(str(e), 'ERROR')
+            output(traceback.format_exc(), 'ERROR')
+        finally:
             threadLock.release()
-            output('Use cached result, key={}'.format(msg_flag), 'DEBUG')
-            return
-        
-        # 先将数据更新为正在处理状态，避免被其它节点重复处理
-        # state: 0-处理中， 1-已完成，若无此参数表示尚未处理
-        threadLock.acquire()
-        ret = updateState(es, index, msg_id, MsgState.PROGRESSING)
-        threadLock.release()
-
-        if not ret:
-            output('Maybe processing by other thread, _id={}'.format(msg_id))
-            return
-        
-        msg_update = {}
-        # 按插件顺序对数据进行处理（插件顺序在配置文件中定义）
-        for i in sorted(plugins.keys()):
-            (pluginName, plugin) = plugins[i]
-            output('Plugin {} processing ...'.format(pluginName), 'DEBUG')
-
-            try:
-                ret = plugin.execute(msg)
-                
-                if ret:
-                    msg_update = dict(msg_update, **ret)
-                    msg = dict(msg, **ret)
-            except:
-                output(traceback.format_exc(), 'ERROR')
-            
-            output('Plugin {} completed.'.format(pluginName), 'DEBUG')
-        
-        # 更新数据
-        msg_update['state'] = MsgState.COMPLETED
-
-        threadLock.acquire()
-        ret = update(es, index, msg_id, msg_update)
-        threadLock.release()
-        
-        if ret:
-            # 插入缓存
-            threadLock.acquire()
-            cache.set(msg_flag, msg_update)
-            threadLock.release()
-        else:
-            output('Failed to update {}.'.format(msg_id), 'ERROR')
-            
-    except Exception as e:
-        output(str(e), 'ERROR')
-        output(traceback.format_exc(), 'ERROR')
+    else:
+        output('Failed to update {}.'.format(msg_id), 'ERROR')
 
     output('Thread {} exited.'.format(pos), 'DEBUG')
 
@@ -230,11 +216,11 @@ def main(options):
     主函数
     :param options: 命令行传入参数对象
     """
-    global es, cache, threadLock, threadExit, debug
+    global es, cache, threadLock, debug
     
     debug = options.debug
     es = Elasticsearch(hosts=options.hosts)
-    cache = Cache(maxsize=options.cache_size, ttl=300, timer=time.time, default=None)
+    cache = Cache(maxsize=options.cache_size, ttl=600, timer=time.time, default=None)
 
     startTime = time.time()
     threadLock = threading.RLock()
@@ -253,44 +239,54 @@ def main(options):
     for i in pluginInstances[0]:
         print('[!] - {}'.format(pluginInstances[0][i][0]))
     
+    processCount = 0
     data = []
     while True:
         try:
-            threadLock.acquire()
-            data = search(es, options.index, '15m', options.threads)
-            threadLock.release()
-
+            data = search(es, options.index, last_time='2m', size=options.threads)
             if not data:
-                time.sleep(5)
                 print('[!] No new msg, waiting 5 seconds ...')
-                break
+                time.sleep(5)
 
             while data:
                 for i in range(options.threads):
-                    if threadList[i] and threadList[i].isAlive():
+                    if threadList[i] and threadList[i].isAlive(): continue
+                    if not data: break
+
+                    processCount += 1
+                    item = data.pop()
+                    msg_id = item['_id']
+                    msg = item['_source']
+
+                    if 'ip' not in msg or 'port' not in msg or 'pro' not in msg:
                         continue
 
-                    if not data: break
-                    msg = data.pop()
-                    
-                    output('[!] Starting thread {} ...'.format(i), 'DEBUG')
-                    threadList[i] = threading.Thread(target=filter, args=(i, options.index, msg, pluginInstances[i]))
+                    # 通过 Cache 降低插件的处理频率
+                    host_flag = '{}:{}'.format(msg['ip'], msg['port'])
+                    if msg['pro'] == 'HTTP':
+                        host_flag = msg['url']
+
+                    cacheMsg = cache.get(host_flag)
+                    if cacheMsg:
+                        update(es, options.index, msg_id, cacheMsg)
+                        output('Use cached result, key={}'.format(host_flag), 'DEBUG')
+                        continue
+
+                    # 使用单独的插件调用插件
+                    threadList[i] = threading.Thread(target=filter, args=(i, options, msg_id, host_flag, msg, pluginInstances[i]))
                     threadList[i].setDaemon(True)
                     threadList[i].start()
                 
-                time.sleep(0.5)
+                time.sleep(0.2)
             
         except KeyboardInterrupt:
             print('[!] Ctrl+C, Exiting ...')
-            threadLock.acquire()
-            threadExit = True
-            threadLock.release()
             break
 
     for i in range(options.threads):
         if threadList[i] and threadList[i].isAlive():
-            print('Thread {} waiting...'.format(i))
-            threadList[i].join(30)
+            print('Thread {} waiting to exit...'.format(i))
+            threadList[i].join()
     
     eclipseTime = time.time() - startTime
     print('Total: {} second, {} document.'.format(eclipseTime, processCount))

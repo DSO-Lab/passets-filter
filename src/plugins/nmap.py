@@ -13,6 +13,7 @@ import html
 import json
 import time
 import base64
+import hashlib
 import traceback
 import threading
 
@@ -36,6 +37,48 @@ class FilterPlugin(Plugin):
 
         # 初始化指纹相关路径
         self.loadRules(os.path.join(rootdir, 'rules', 'nmap-service-probes'))
+
+    def _readfile(self, filepath):
+        """
+        读取文件内容
+        :param filepath: 文件路径
+        """
+        try:
+            fp = open(filepath, encoding='utf-8')
+            data = fp.read()
+            fp.close()
+            return data
+        except:
+            self.log(traceback.format_exc(), 'ERROR')
+        return None
+
+    def _writefile(self, filepath, filecontent):
+        """
+        写入文件内容
+        :param filepath: 要写入的文件路径
+        :param filecontent: 要写入的文件内容
+        """
+        try:
+            fp = open(filepath, encoding='utf-8', mode='w')
+            fp.write(filecontent)
+        except:
+            self.log(traceback.format_exc(), 'ERROR')
+        finally:
+            fp.close()
+
+    def loadRuleJson(self, rule_file):
+        """
+        加载 NMAP 规则库（JSON格式）
+        :param rule_file: Json 格式规则库文件
+        """
+        try:
+            data = self._readfile(rule_file)
+            if data:
+                return json.loads(data)
+        except:
+            self.log(traceback.format_exc(), 'ERROR')
+        
+        return None
     
     def loadRules(self, rule_file):
         """
@@ -44,13 +87,21 @@ class FilterPlugin(Plugin):
         """
         self.rules = []
 
-        data = []
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            data = fp.readlines()
-            fp.close()
-        except:
-            self.log(traceback.format_exc(), 'ERROR')
+        converted_rule_path = rule_file[:rule_file.rfind(os.sep) + 1] + 'nmap.json'
+        data = None
+        if os.path.isfile(converted_rule_path):
+            data = self.loadRuleJson(converted_rule_path)
+        
+        file_data = self._readfile(rule_file)
+        if not file_data:
+            raise Exception('NMAP rule file not found.')
+
+        file_hash = hashlib.md5(file_data.encode('utf-8')).hexdigest()
+        if data and data['hash'] == file_hash:
+            self.rules = data['apps']
+            return
+        
+        data = file_data.split('\n')
 
         regex_attr = re.compile(r'\s+([pviodh])(?:/([^/]*?)/|\|([^\|]*?)\|)$')
         regex_cpe = re.compile(r'\s+cpe:/.*?$')
@@ -104,6 +155,7 @@ class FilterPlugin(Plugin):
             self.rules.append(rule)
 
         self._ruleCount = len(self.rules)
+        self._writefile(converted_rule_path, json.dumps({'hash': file_hash, 'apps': self.rules}, indent=2, sort_keys=True))
 
     def analyze(self, data):
         """
