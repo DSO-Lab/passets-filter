@@ -243,42 +243,42 @@ def main(options):
     data = []
     while True:
         try:
-            data = search(es, options.index, last_time='2m', size=options.threads)
             if not data:
-                print('[!] No new msg, waiting 5 seconds ...')
-                time.sleep(5)
+                data = search(es, options.index, last_time='2m', size=options.threads * 2)
+                if not data:
+                    print('[!] No new msg, waiting 10 seconds ...')
+                    time.sleep(10)
+                    continue
 
-            while data:
-                for i in range(options.threads):
-                    if threadList[i] and threadList[i].isAlive(): continue
-                    if not data: break
+            for i in range(options.threads):
+                if threadList[i] and threadList[i].isAlive(): continue
+                if not data: break
 
-                    processCount += 1
-                    item = data.pop()
-                    msg_id = item['_id']
-                    msg = item['_source']
+                processCount += 1
+                item = data.pop()
+                msg_id = item['_id']
+                msg = item['_source']
 
-                    if 'ip' not in msg or 'port' not in msg or 'pro' not in msg:
-                        continue
+                if 'ip' not in msg or 'port' not in msg or 'pro' not in msg:
+                    continue
 
-                    # 通过 Cache 降低插件的处理频率
-                    host_flag = '{}:{}'.format(msg['ip'], msg['port'])
-                    if msg['pro'] == 'HTTP':
-                        host_flag = msg['url']
+                # 通过 Cache 降低插件的处理频率
+                host_flag = '{}:{}'.format(msg['ip'], msg['port'])
+                if msg['pro'] == 'HTTP':
+                    host_flag = msg['url']
 
-                    cacheMsg = cache.get(host_flag)
-                    if cacheMsg:
-                        update(es, options.index, msg_id, cacheMsg)
-                        output('Use cached result, key={}'.format(host_flag), 'DEBUG')
-                        continue
+                cacheMsg = cache.get(host_flag)
+                if cacheMsg:
+                    update(es, options.index, msg_id, cacheMsg)
+                    output('Use cached result, key={}'.format(host_flag), 'DEBUG')
+                    continue
 
-                    # 使用单独的插件调用插件
-                    threadList[i] = threading.Thread(target=filter, args=(i, options, msg_id, host_flag, msg, pluginInstances[i]))
-                    threadList[i].setDaemon(True)
-                    threadList[i].start()
+                # 使用单独的插件调用插件
+                threadList[i] = threading.Thread(target=filter, args=(i, options, msg_id, host_flag, msg, pluginInstances[i]))
+                threadList[i].setDaemon(True)
+                threadList[i].start()
                 
-                time.sleep(0.2)
-            
+            time.sleep(0.2)
         except KeyboardInterrupt:
             print('[!] Ctrl+C, Exiting ...')
             break
@@ -296,7 +296,7 @@ def usage():
     """
     获取命令行参数
     """
-    parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.0')
+    parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.1')
     parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='passets', help='Elasticsearch index name')
     parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads')

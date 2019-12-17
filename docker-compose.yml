@@ -9,6 +9,8 @@ services:
       - ELASTICSEARCH_HOST=<elasticsearch-host>:9200
       - ELASTICSEARCH_INDEX=passets
       - THREADS=20
+      - CACHE_SIZE=1024
       - DEBUG=0
+
 
 
