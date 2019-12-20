@@ -3,16 +3,15 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-11
+MOdified: 2019-12-20
 '''
 
 import os
 import sys
 import traceback
-
-from imp import load_module, \
-                find_module
 import importlib
+
+from datetime import datetime
 
 class Plugin(object):
     """
@@ -130,12 +129,12 @@ class Plugin(object):
     def log(self, msg, level = 'INFO'):
         """日志输出"""
         if level == 'ERROR':
-            print('[-] ' + str(msg))
+            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         elif level == 'DEBUG':
             if self._debug:
-                print('[D] ' + str(msg))
+                print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         else:
-            print('[!] ' + str(msg))
+            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
 
     def set_config(self, config):
         """

@@ -2,14 +2,12 @@
 
 ## 简介
 
-本模块主要用于对收集的被动资产原始数据进行二次加工，所有的加工都采用插件的方式进行，目前已支持以下插件。
+本模块主要用于对收集的被动资产原始数据进行二次加工，Elasticsearch 中经过清洗的合法数据（至少包含ip和port字段）会添加 state 字段。state=0表示正在清洗，state=1表示已完成清洗。所有的清洗操作都采用插件的方式进行，目前已支持以下插件。
 
 | 插件名     | 功能简介                           | 配置项
 |------------|------------------------------------|----------------------------------|
-| ip         | 计算IP数值，识别内网IP             | enable, index, inner_ips
 | wappalyzer | 识别HTTP类数据中的资产指纹信息     | enable, index
 | nmap       | 识别TCP类数据中的资产指纹信息      | enable, index
-| urlparse   | 拆分URL，识别站点、路径、路径模板  | enable, index
 
 ### Wappalyzer 插件
 
@@ -22,6 +20,11 @@
 基于数据中的 TCP 响应报文来识别目标服务的指纹信息。
 
 指纹库基于 [NMAP](https://github.com/nmap/nmap/) 项目中的 `nmap-service-probes` 指纹库。
+
+## 运行环境
+
+- Python 3.x
+- Nodejs 8.x 及以上
 
 ## 文件说明
 
@@ -58,7 +61,8 @@ OPTIONS:
   --version                     输出版本信息
   -h, --help                    显示命令行帮助信息
   -H HOST, --host=HOST          设置 Elasticsearch 服务器地址/地址:端口
-  -i INDEX, --index=INDEX       设置 Elasticsearch 索引名，默认为passets
+  -i INDEX, --index=INDEX       设置 Elasticsearch 索引名，默认为logstash-passets，程序会自动在后面追加通配符(*
+  -r RANGE, --range=RANGE 设置 Elasticsearch 查询的最小时间单位（从当前时间往前推），默认为2m（2分钟），有效的单位有秒（s）、分钟（m）、小时（h）、天（d）、月（M）、年（y）
   -t THREADS, --threads=THREADS 设置并发线程数量，默认为1个线程
   -c CACHE_SIZE --cache-size=CACHE_SIZE 设置处理缓存的大小
   -d DEBUG, --debug=DEBUG       调试信息开关，0-关闭，1-开启
@@ -67,8 +71,8 @@ OPTIONS:
 **使用示例：**
 
 ```
-# 并发10个线程处理 192.168.1.2:9200 中 passets 索引下的数据，执行过程输出调试信息
-python3 main.py -H 192.168.1.2:9200 -i passets -t 10 -d 1
+# 并发10个线程处理 192.168.1.2:9200 中 logstash-passets* 索引下的数据，执行过程输出调试信息
+python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5m -t 10 -d 1
 ```
 
 ## 清洗程序配置说明
@@ -77,27 +81,13 @@ python3 main.py -H 192.168.1.2:9200 -i passets -t 10 -d 1
 
 **配置示例：**
 ```
-ip:                                 # 插件名称（必须跟插件脚本文件名一致）
-  enable: true                      # 插件是否启用，true为启用
-  index: 1                          # 插件处理顺序号（0及以上整数，不可重复，数值越小越优先）
-  inner_ips:                        # 内部IP地址定义（默认使用RFC定义的私有地址范围）
-    - 10.0.0.0-10.255.255.255
-    - 172.16.0.0-172.31.255.255
-    - 192.168.0.0-192.168.255.255
-    - 169.254.0.0-169.254.255.255
-    - 127.0.0.1-127.0.0.255
-
-url:
-  enable: false                     # 插件是否启用，false为停用
-  index: 2
-
 wappalyzer:
-  enable: false
-  index: 3
+  enable: true
+  index: 1
 
 nmap:
-  enable: false
-  index: 4
+  enable: true
+  index: 2
 ```
 
 
@@ -109,7 +99,7 @@ Dockerfile:
 ```
 FROM rackspacedot/python37:latest
 
-LABEL maintainer="tanjelly@gmail.com" version="1.0.0"
+LABEL maintainer="tanjelly@gmail.com" version="<ver>"
 
 USER root
 
@@ -141,20 +131,25 @@ version: "3"
 services:
   filter:
     build: .
-    image: passets-filter:<tag>
+    image: dsolab/passets-filter:<ver>
     container_name: passets-filter
     environment:
       - ELASTICSEARCH_HOST=<elasticsearch-host>:9200
       - ELASTICSEARCH_INDEX=passets
+      - RANGE=2m
       - THREADS=20
       - CACHE_SIZE=1024
       - DEBUG=0
+    volumes:
+      - ./src/config/plugin.yml:/opt/filter/config/plugin.yml
+      - ./src/rules/apps.json:/opt/filter/rules/apps.json
+      - ./src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes
 ```
 
 构建命令：
 
 ```
-docker build -t passets-filter:<tag> .
+docker build -t dsolab/passets-filter:<ver> .
 或者
 docker-compose build
 ```
@@ -165,10 +160,10 @@ docker-compose build
 
 ```
 # 基本命令：
-docker run -it passets-filter:<tag>
+docker run -it dsolab/passets-filter:<ver>
 
-# 使用新的配置文件启动：
-docker run -it passets-filter:<tag> -v ./config/plugin.yml:/opt/filter/config/plugin.yml -e $ELASTICSEARCH_HOST=<elasticsearch>:9200 -e ELASTICSEARCH_INDEX=passets
+# 使用新的配置文件、指纹规则启动：
+docker run -it passets-filter:<ver> -v $(PWD)/src/config/plugin.yml:/opt/filter/config/plugin.yml -v $(PWD)/src/rules/apps.json:/opt/filter/rules/apps.json -v $(PWD)/src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes -e $ELASTICSEARCH_HOST=<elasticsearch>:9200
 ```
 
 使用 docker-compose 启动：

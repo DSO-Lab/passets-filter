@@ -1,10 +1,10 @@
 FROM rackspacedot/python37:latest
 
-LABEL maintainer="tanjelly@gmail.com" version="1.0.1"
+LABEL maintainer="tanjelly@gmail.com" version="1.0.0"
 
 USER root
 
-ENV TZ="Asia/Shanghai" ELASTICSEARCH_HOST="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" THREADS=10 CACHE_SIZE=1024 DEBUG=0
+ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" RANGE="2m" THREADS=10 CACHE_SIZE=1024 DEBUG=0
 
 COPY src/ /opt/filter/
 
@@ -21,4 +21,4 @@ RUN curl https://nodejs.org/dist/v8.16.2/node-v8.16.2-linux-x64.tar.xz -o node.t
     apt-get autoclean && \
     apt-get autoremove
 
-ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H $ELASTICSEARCH_HOST -i $ELASTICSEARCH_INDEX -c $CACHE_SIZE -t $THREADS -d $DEBUG"]
+ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H $ELASTICSEARCH_URL -i $ELASTICSEARCH_INDEX -r $RANGE -c $CACHE_SIZE -t $THREADS -d $DEBUG"]

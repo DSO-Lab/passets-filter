@@ -1,13 +1,13 @@
 version: "3"
 
 services:
-  filter-1:
+  filter:
     build: .
-    image: passets-filter:1.0.0
-    container_name: passets-filter-1
+    image: dsolab/passets-filter:1.0.0
+    container_name: passets-filter
     environment:
-      - ELASTICSEARCH_HOST=<elasticsearch-host>:9200
-      - ELASTICSEARCH_INDEX=passets
+      - ELASTICSEARCH_URL=<elasticsearch-host>:9200
+      - ELASTICSEARCH_INDEX=logstash-passets
       - THREADS=20
       - CACHE_SIZE=1024
       - DEBUG=0

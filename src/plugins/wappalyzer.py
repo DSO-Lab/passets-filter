@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-11
+MOdified: 2019-12-20
 '''
 
 import os
@@ -67,6 +67,8 @@ class FilterPlugin(Plugin):
         try:
             fd = os.popen(cmd)
             data = fd.read()
+            if not data:
+                raise Exception('Wappalyzer result is empty.')
 
             try:
                 result = json.loads(data)
