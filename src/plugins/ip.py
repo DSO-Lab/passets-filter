@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-11
+Modified: 2019-12-11
 '''
 
 import os

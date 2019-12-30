@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-11
+Modified: 2019-12-30
 '''
 
 import os
@@ -27,11 +27,12 @@ class FilterPlugin(Plugin):
     - apps: 指纹信息，格式: [{name,version,os,device,info,service},...]
     """
     
-    def __init__(self, rootdir, debug = False):
+    def __init__(self, rootdir, debug=False, logger=None):
         """
         构造函数
         :param rootdir: 工作目录
         :param debug: 调式信息输出开关
+        :param logger: 日志处理对象
         """
         super().__init__(rootdir, debug)
 

@@ -10,13 +10,7 @@ COPY src/ /opt/filter/
 
 WORKDIR /opt/
 
-RUN curl https://nodejs.org/dist/v8.16.2/node-v8.16.2-linux-x64.tar.xz -o node.tar.xz && \
-    mkdir /opt/node && tar -C /opt/node --strip-components=1 -xf node.tar.xz && rm -f node.tar.xz && \
-    ln -s /opt/node/bin/node /usr/bin/node && \
-    ln -s /opt/node/bin/npm /usr/bin/npm && \
-    ln -s /opt/node/bin/npx /usr/bin/npx && \
-    cd /opt/filter/ && pip3 install -r requirements.txt && \
-    cd /opt/filter/wappalyzer/ && /usr/bin/npm install && \
+RUN pip3 install -r requirements.txt && \
     apt-get clean all && \
     apt-get autoclean && \
     apt-get autoremove

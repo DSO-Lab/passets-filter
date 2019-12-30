@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-20
+Modified: 2019-12-30
 '''
 
 import base64
@@ -16,6 +16,7 @@ import time
 import html
 import optparse
 import threading
+import logging
 
 from datetime import datetime
 from elasticsearch import Elasticsearch
@@ -31,6 +32,7 @@ processCount = 0
 startTime = time.time()
 es = None
 pluginInstances = []
+logger= None
 
 class MsgState:
     """消息状态"""
@@ -43,13 +45,22 @@ def output(msg, level='INFO'):
     """
     输出信息
     """
-    global debug
-    if level == 'ERROR':
-        print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-    elif level == 'DEBUG':
-        if debug: print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+    global debug, logger
+    if logger:
+        if level == 'ERROR':
+            logger.debug(str(msg))
+        elif level == 'DEBUG':
+            logger.error(str(msg))
+        else:
+            logger.info(str(msg))
     else:
-        print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        if level == 'ERROR':
+            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        elif level == 'DEBUG':
+            if debug:
+                print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        else:
+            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
 
 def search(es, index, time_range='15m', size=10):
     """
@@ -321,11 +332,6 @@ def usage():
 
     options, args = parser.parse_args()
     options.rootdir = os.path.split(os.path.abspath(sys.argv[0]))[0]
-    options.hosts = options.hosts.split(',')
-    for i in range(len(options.hosts)):
-        if not options.hosts[i]:
-            del(options.hosts[i])
-    
     if not options.hosts:
         parser.error('Please specify elasticsearch address by entering the -H/--host parameter.')
     
@@ -339,6 +345,14 @@ def usage():
     if not match:
         parser.error('Please specify valid time range, format is [number][unit]，like: 15m for 15 minutes. The valid unit has s(second), m(minute), h(hour), d(day), M(month) and y(year).')
 
+    options.hosts = options.hosts.split(',')
+    for i in range(len(options.hosts)):
+        if not options.hosts[i]:
+            del(options.hosts[i])
+
+    if not options.hosts:
+        parser.error('Please specify elasticsearch address by entering the -H/--host parameter.')
+    
     return options
 
 if __name__ == '__main__':

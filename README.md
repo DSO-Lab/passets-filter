@@ -39,7 +39,7 @@ src                      # 核心代码文件
   rules                  # 指纹规则库存放路径
     apps.json            # Wappalyzer Web 应用指纹库
     nmap-service-probes  # NMAP 端口服务指纹库
-  wappalyzer             # Wappalyzer 主程序目录（基于 5.8.4 版本修改）
+  wappalyzer             # Wappalyzer 主程序目录（基于 5.8.4 版本修改，已废弃）
     ... ...
   main.py                # 主程序
   requirements.txt       # 程序依赖库清单
@@ -103,24 +103,18 @@ LABEL maintainer="tanjelly@gmail.com" version="<ver>"
 
 USER root
 
-ENV TZ="Asia/Shanghai" ELASTICSEARCH_HOST="localhost:9200" ELASTICSEARCH_INDEX="passets" THREADS=10 CACHE_SIZE=1024 DEBUG=0
+ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" THREADS=10 CACHE_SIZE=1024 DEBUG=0
 
 COPY src/ /opt/filter/
 
 WORKDIR /opt/
 
-RUN curl https://nodejs.org/dist/v8.16.2/node-v8.16.2-linux-x64.tar.xz -o node.tar.xz && \
-    mkdir /opt/node && tar -C /opt/node --strip-components=1 -xf node.tar.xz && rm -f node.tar.xz && \
-    ln -s /opt/node/bin/node /usr/bin/node && \
-    ln -s /opt/node/bin/npm /usr/bin/npm && \
-    ln -s /opt/node/bin/npx /usr/bin/npx && \
-    cd /opt/filter/ && pip3 install -r requirements.txt && \
-    cd /opt/filter/wappalyzer/ && /usr/bin/npm install && \
+RUN pip3 install -r requirements.txt && \
     apt-get clean all && \
     apt-get autoclean && \
     apt-get autoremove
 
-ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H $ELASTICSEARCH_HOST -i $ELASTICSEARCH_INDEX -t $THREADS -c $CACHE_SIZE -d $DEBUG"]
+ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H ELASTICSEARCH_URL -i $ELASTICSEARCH_INDEX -t $THREADS -c $CACHE_SIZE -d $DEBUG"]
 ```
 
 docker-compose.yml
@@ -134,9 +128,9 @@ services:
     image: dsolab/passets-filter:<ver>
     container_name: passets-filter
     environment:
-      - ELASTICSEARCH_HOST=<elasticsearch-host>:9200
-      - ELASTICSEARCH_INDEX=passets
-      - RANGE=2m
+      - ELASTICSEARCH_URL=<elasticsearch-host>:9200
+      - ELASTICSEARCH_INDEX=logstash-passets
+      - RANGE=5m
       - THREADS=20
       - CACHE_SIZE=1024
       - DEBUG=0
@@ -163,7 +157,7 @@ docker-compose build
 docker run -it dsolab/passets-filter:<ver>
 
 # 使用新的配置文件、指纹规则启动：
-docker run -it passets-filter:<ver> -v $(PWD)/src/config/plugin.yml:/opt/filter/config/plugin.yml -v $(PWD)/src/rules/apps.json:/opt/filter/rules/apps.json -v $(PWD)/src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes -e $ELASTICSEARCH_HOST=<elasticsearch>:9200
+docker run -it passets-filter:<ver> -v $(PWD)/src/config/plugin.yml:/opt/filter/config/plugin.yml -v $(PWD)/src/rules/apps.json:/opt/filter/rules/apps.json -v $(PWD)/src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes -e ELASTICSEARCH_URL=<elasticsearch>:9200
 ```
 
 使用 docker-compose 启动：

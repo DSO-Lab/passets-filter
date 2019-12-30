@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-20
+Modified: 2019-12-30
 '''
 
 import os
@@ -98,7 +98,7 @@ class Plugin(object):
         
         return plugins
 
-    def __init__(self, rootdir, debug=False):
+    def __init__(self, rootdir, debug=False, logger=None):
         """
         初始化
         :param rootdir: 应用根目录
@@ -106,6 +106,7 @@ class Plugin(object):
         """
         self._rootdir = rootdir
         self._debug = debug
+        self._logger = logger
 
     def remain_cmd_len(self, cmd):
         """
@@ -126,16 +127,28 @@ class Plugin(object):
         """
         return str.replace('\\', '\\\\').replace('"', '\"')
 
-    def log(self, msg, level = 'INFO'):
-        """日志输出"""
-        if level == 'ERROR':
-            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-        elif level == 'DEBUG':
-            if self._debug:
-                print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+    def log(self, msg, level='INFO'):
+        """
+        日志输出
+        :param msg: 日志消息
+        :param level: 日志等级，分为 INFO、ERROR和DEBUG
+        """
+        if self._logger:
+            if level == 'ERROR':
+                self._logger.debug(str(msg))
+            elif level == 'DEBUG':
+                self._logger.error(str(msg))
+            else:
+                self._logger.info(str(msg))
         else:
-            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-
+            if level == 'ERROR':
+                print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            elif level == 'DEBUG':
+                if self._debug:
+                    print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            else:
+                print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+    
     def set_config(self, config):
         """
         设置插件配置，配置为字典形式，例如：{ "参数名": 参数值 }
