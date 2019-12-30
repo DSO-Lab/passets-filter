@@ -272,7 +272,7 @@ def main(options):
                 cacheMsg = cache.get(msg['_cache'])
                 if cacheMsg:
                     output('Use cached result, key={}'.format(msg['_cache']), 'DEBUG')
-                    ret = update(es, options.index, item['_id'], cacheMsg)
+                    ret = update(es, item['_index'], item['_id'], cacheMsg)
                     if not ret:
                         output('Update {} error.'.format(item['_id']), 'ERROR')
                     time.sleep(0.1)
