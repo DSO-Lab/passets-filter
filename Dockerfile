@@ -8,7 +8,7 @@ ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="l
 
 COPY src/ /opt/filter/
 
-WORKDIR /opt/
+WORKDIR /opt/filter/
 
 RUN pip3 install -r requirements.txt && \
     apt-get clean all && \
