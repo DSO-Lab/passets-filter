@@ -14,6 +14,7 @@ import json
 import time
 import base64
 import hashlib
+import copy
 import traceback
 import threading
 
@@ -100,6 +101,9 @@ class FilterPlugin(Plugin):
         file_hash = hashlib.md5(file_data.encode('utf-8')).hexdigest()
         if data and data['hash'] == file_hash:
             self.rules = data['apps']
+            # 预加载正则表达式
+            for i in range(len(self.rules)):
+                self.rules[i]['r'] = re.compile(self.rules[i]['m'], self.rules[i]['mf'])
             return
         
         data = file_data.split('\n')
@@ -109,6 +113,7 @@ class FilterPlugin(Plugin):
         regex_main = re.compile(r'^(?:soft)?match\s+([^\s]+)\s+m[\|=%](.*?)[\|=%]([ismg]*?)$')
         regex_flags = {'i':re.I, 's':re.S, 'm':re.M, 'u':re.U, 'l':re.L, 'a':re.A, 't':re.T, 'x':re.X}
         is_tcp = False
+        tmp_rules = []
         for _ in data:
             _ = _.strip()
 
@@ -131,7 +136,7 @@ class FilterPlugin(Plugin):
                 cpe = m.group(0).strip().split(' ')
             
             rule = {
-                'm': None, 'mf': 0, 's': None, 'p': None, 'v': None, 'i': None, 'o': None, 'd': None, 'h': None, 'cpe': cpe
+                'm': None, 'mf': 0, 's': None, 'p': None, 'v': None, 'i': None, 'o': None, 'd': None, 'h': None, 'cpe': cpe, 'r': None
             }
             while True:
                 m = regex_attr.search(_)
@@ -153,10 +158,15 @@ class FilterPlugin(Plugin):
                     if f in regex_flags:
                         rule['mf'] |= regex_flags[f]
             
-            self.rules.append(rule)
+            tmp_rules.append(rule)
 
+            new_rule = copy.deepcopy(rule)
+            # 预加载正则表达式
+            new_rule['r'] = re.compile(new_rule['m'], new_rule['mf'])
+            self.rules.append(new_rule)
+        
         self._ruleCount = len(self.rules)
-        self._writefile(converted_rule_path, json.dumps({'hash': file_hash, 'apps': self.rules}, indent=2, sort_keys=True))
+        self._writefile(converted_rule_path, json.dumps({'hash': file_hash, 'apps': tmp_rules}, indent=2, sort_keys=True))
 
     def analyze(self, data):
         """
@@ -164,12 +174,12 @@ class FilterPlugin(Plugin):
         :param data: TCP响应数据包
         :return: 指纹列表，例如：[{'name':'XXX','version':'XXX',...}]
         """
-        result = None
+        result = []
         for rule in self.rules:
             try:
-                m = re.match(rule['m'], data, rule['mf'])
+                m = rule['r'].match(data)
                 if m:
-                    result = {
+                    app = {
                         'name': rule['p'],
                         'version': rule['v'],
                         'info': rule['i'],
@@ -180,20 +190,19 @@ class FilterPlugin(Plugin):
                     if m.lastindex:
                         for i in range(m.lastindex + 1):
                             skey = '${}'.format(i)
-                            for k in result:
-                                if not result[k]: continue
+                            for k in app:
+                                if not app[k]: continue
 
-                                if skey in result[k]:
-                                    result[k] = result[k].replace(skey, m.group(i))
+                                if skey in app[k]:
+                                    app[k] = app[k].replace(skey, m.group(i))
                     
+                    result.append(app)
                     break
             except Exception as e:
                 self.log(e, 'ERROR')
                 self.log(traceback.format_exc(), 'ERROR')
         
-        if result:
-            return [ result ]
-        return None
+        return result
 
     def execute(self, msg):
         """
@@ -225,7 +234,7 @@ if __name__ == '__main__':
         "host": "111.206.63.16:80",
 
         # Example: 554 SMTP synchronization error\r\n
-        #"data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",
+        "data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",
 
         # Example: >INFO:OpenVPN Management Interface Version 1.0.1 -- type 'help' for more info\r\n>
         #"data": "3e494e464f3a4f70656e56504e204d616e6167656d656e7420496e746572666163652056657273696f6e20312e302e31202d2d2074797065202768656c702720666f72206d6f726520696e666f0d0a3e",
@@ -233,7 +242,7 @@ if __name__ == '__main__':
         # Example: get_info: plugins\nRPRT 0\nasfdsafasfsafas
         #"data": "6765745f696e666f3a20706c7567696e730a5250525420300a617366647361666173667361666173",
 
-        "data": '16030300d0010000cc03035df0c691b795581015d570c868b701ed1784528e488e9aeec4b37dad521e2de4202332000016299b175b8f0ad21daeb83a03eb5d47b57bb60ecfbd10bcd67a101d0026c02cc02bc030c02fc024c023c028c027c00ac009c014c013009d009c003d003c0035002f000a0100005d00000019001700001461637469766974792e77696e646f77732e636f6d000500050100000000000a00080006001d00170018000b00020100000d001400120401050102010403050302030202060106030023000000170000ff01000100',
+        #"data": '16030300d0010000cc03035df0c691b795581015d570c868b701ed1784528e488e9aeec4b37dad521e2de4202332000016299b175b8f0ad21daeb83a03eb5d47b57bb60ecfbd10bcd67a101d0026c02cc02bc030c02fc024c023c028c027c00ac009c014c013009d009c003d003c0035002f000a0100005d00000019001700001461637469766974792e77696e646f77732e636f6d000500050100000000000a00080006001d00170018000b00020100000d001400120401050102010403050302030202060106030023000000170000ff01000100',
 
         "inner": False,
         "tag": "sensor-ens160"

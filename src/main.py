@@ -17,6 +17,7 @@ import html
 import optparse
 import threading
 import logging
+import copy
 
 from datetime import datetime
 from elasticsearch import Elasticsearch
@@ -234,12 +235,14 @@ def main(options):
     threadList = [None for i in range(options.threads)]
 
     # 每个线程生成独立的插件实例
-    pluginInstances = []
-    for i in range(options.threads):
-        pluginInstances.append(Plugin.loadPlugins(options.rootdir, options.debug))
+    pluginInstances = [ Plugin.loadPlugins(options.rootdir, options.debug) ]
+    print('[!] Plugin instance 1 started.')
+    for i in range(1, options.threads):
+        pluginInstances.append(copy.deepcopy(pluginInstances[0]))
+        print('[!] Plugin instance {} started.'.format(i + 1))
 
     if (len(pluginInstances[0]) == 0):
-        print('No plugin loaded, exit.')
+        print('[-] No plugin loaded, exit.')
         quit(1)
     
     print('[!] Loaded Plugins:')
@@ -325,7 +328,7 @@ def usage():
     parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.1')
     parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='passets', help='Elasticsearch index name')
-    parser.add_option('-r', '--range', action='store', dest='range', type='string', default='2m', help='Elasticsearch search time range, like: 15m, 24h, 7d')
+    parser.add_option('-r', '--range', action='store', dest='range', type='string', default='5m', help='Elasticsearch search time range, like: 15m, 24h, 7d')
     parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
