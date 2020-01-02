@@ -17,7 +17,6 @@ import html
 import optparse
 import threading
 import logging
-import copy
 
 from datetime import datetime
 from elasticsearch import Elasticsearch
@@ -235,10 +234,9 @@ def main(options):
     threadList = [None for i in range(options.threads)]
 
     # 每个线程生成独立的插件实例
-    pluginInstances = [ Plugin.loadPlugins(options.rootdir, options.debug) ]
-    print('[!] Plugin instance 1 started.')
-    for i in range(1, options.threads):
-        pluginInstances.append(copy.deepcopy(pluginInstances[0]))
+    pluginInstances = []
+    for i in range(options.threads):
+        pluginInstances.append(Plugin.loadPlugins(options.rootdir, options.debug))
         print('[!] Plugin instance {} started.'.format(i + 1))
 
     if (len(pluginInstances[0]) == 0):
@@ -338,8 +336,8 @@ def usage():
     if not options.hosts:
         parser.error('Please specify elasticsearch address by entering the -H/--host parameter.')
     
-    if options.threads < 1 or options.threads > 500:
-        parser.error('Please specify valid thread count, the valid range is 1-500. Default is 10.')
+    if options.threads < 1 or options.threads > 50:
+        parser.error('Please specify valid thread count, the valid range is 1-50. Default is 10.')
 
     if options.cache_size < 1 or options.cache_size > 65535:
         parser.error('Please specify valid thread count, the valid range is 1-65535. Default is 1024.')
