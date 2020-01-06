@@ -20,6 +20,7 @@ import logging
 
 from datetime import datetime
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
 from elasticsearch.exceptions import ConnectionError, ConflictError
 from cacheout import Cache
 from plugins import Plugin
@@ -90,9 +91,12 @@ def search(es, index, time_range='15m', size=10):
             }
         }
     }
+    
+    ctime = time.time()
     try:
         ret = es.search(index=index, body=query, version=True)
         output(ret, 'DEBUG')
+        print('Search time: {}'.format(time.time() - ctime))
         return ret['hits']['hits']
     except ConnectionError:
         output("ES connect error.", 'ERROR')
@@ -100,7 +104,18 @@ def search(es, index, time_range='15m', size=10):
     except Exception as e:
         output(e, 'ERROR')
 
+    print('Search time: {}'.format(time.time() - ctime))
     return []
+
+def batch_update(es, docs):
+    ctime = time.time()
+    try:
+        output(docs, 'DEBUG')
+        ret = bulk(es, docs)
+        output(ret, 'DEBUG')
+    except Exception as e:
+        output(e, 'ERROR')
+    print('Batch update time: {}'.format(time.time() - ctime))
 
 def update(es, index, id, info):
     """
@@ -110,11 +125,13 @@ def update(es, index, id, info):
     :param info: 要更新的数据项字典
     :return: True | False
     """
+    ctime = time.time()
     output('Update {}. Data: {}'.format(id, str(info)), 'DEBUG')
     try:
         ret = es.update(index=index, id=id, body={"doc": info})
         output(ret, 'DEBUG')
         if ret and 'result' in ret and ret['result'] == 'updated':
+            print('Update time: {}'.format(time.time() - ctime))
             return True
     except ConnectionError:
         output("ES connect error.", 'ERROR')
@@ -123,6 +140,7 @@ def update(es, index, id, info):
         output("ES doc update conflict.", 'ERROR')
     except Exception as e:
         output(e, 'ERROR')
+    print('Update time: {}'.format(time.time() - ctime))
     return False
 
 def updateState(es, index, id, state):
@@ -177,13 +195,13 @@ def filter(pos, options, msg, plugins):
     :param msg: 要过滤的数据
     :param plugins: 过滤插件列表
     """
-    global cache, threadLock, es
+    global cache, threadLock
 
     output('Starting thread {} ...'.format(pos), 'DEBUG')
-
+    ctime = time.time()
     msg_update = {}
     
-    #es = Elasticsearch(hosts=options.hosts, maxsize=1)
+    es = Elasticsearch(hosts=options.hosts, maxsize=1)
     # 先将数据更新为正在处理状态，避免被其它节点重复处理
     # state: 0-处理中， 1-已完成，若无此参数表示尚未处理
     ret = updateState(es, msg['_index'], msg['_id'], MsgState.PROGRESSING)
@@ -215,7 +233,7 @@ def filter(pos, options, msg, plugins):
         cache.set(msg['_cache'], msg_update)
     else:
         output('Failed to update {}.'.format(msg['_id']), 'ERROR')
-
+    print()
     output('Thread {} exited.'.format(pos), 'DEBUG')
 
 def main(options):
@@ -226,7 +244,7 @@ def main(options):
     global es, cache, threadLock, debug, processCount, startTime
     
     debug = options.debug
-    es = Elasticsearch(hosts=options.hosts, maxsize=options.threads + 1)
+    es = Elasticsearch(hosts=options.hosts, maxsize=1) #options.threads
     cache = Cache(maxsize=options.cache_size, ttl=600, timer=time.time, default=None)
 
     startTime = time.time()
@@ -248,54 +266,83 @@ def main(options):
         print('[!] - {}'.format(pluginInstances[0][i][0]))
     
     data = []
+    bulk_actions = []
     while True:
         try:
             if not data:
-                data = search(es, options.index + '*', time_range=options.range, size=options.threads * 2)
+                print('Search new document.')
+                data = search(es, options.index + '*', time_range=options.range, size=options.threads * 20)
                 if not data:
                     print('[!] No new msg, waiting 5 seconds ...')
-                    time.sleep(5)
+                    time.sleep(1)
                     continue
 
+            item = data.pop()
+            
+            # 处理过的ID缓存下来，避免在单一实例中出现重复处理
+            cacheMsg = cache.get(item['_id'])
+            if cacheMsg:
+                #print('Process lasted, abort.')
+                #data = []
+                continue
+
+            processCount += 1
+            cache.set(item['_id'], True)
+            if 'ip' not in item['_source'] or 'port' not in item['_source'] or 'pro' not in item['_source']:
+                # bulk_actions.append({
+                #     '_op_type': 'delete', 
+                #     '_index': item['_index'],
+                #     '_type': item['_type'],
+                #     '_id': item['_id']
+                # })
+                continue
+
+            print('Processing {}'.format(item['_id']))
+            msg = item['_source']
+            msg['_id'] = item['_id']
+            msg['_index'] = item['_index']
+            # 通过 Cache 降低插件的处理频率
+            msg['_cache'] = '{}:{}'.format(msg['ip'], msg['port'])
+            if msg['pro'] == 'HTTP' or msg['pro'] == 'HTTPS':
+                msg['_cache'] = msg['url']
+
+            cacheMsg = cache.get(msg['_cache'])
+            if cacheMsg:
+                output('Use cached result, key={}'.format(msg['_cache']), 'INFO')
+                bulk_actions.append({
+                    '_op_type': 'update', 
+                    '_index': item['_index'],
+                    '_type': item['_type'],
+                    '_id': item['_id'],
+                    'doc': cacheMsg
+                })
+
+                # 超过10个处理一次
+                if not data and len(bulk_actions) > 0:
+                    print('[!] Batch update {} document.'.format(len(bulk_actions)))
+                    batch_update(es, bulk_actions)
+                    bulk_actions = []
+                continue
+            
+            processed = False
             for i in range(options.threads):
-                if threadList[i] and threadList[i].isAlive(): continue
-                if not data: break
-
-                item = data.pop()
+                if threadList[i] and threadList[i].isAlive():
+                    continue
                 
-                # 处理过的ID缓存下来，避免在单一实例中出现重复处理
-                cacheMsg = cache.get(item['_id'])
-                if cacheMsg:
-                    continue
-
-                processCount += 1
-                cache.set(item['_id'], True)
-                if 'ip' not in item['_source'] or 'port' not in item['_source'] or 'pro' not in item['_source']:
-                    continue
-
-                msg = item['_source']
-                msg['_id'] = item['_id']
-                msg['_index'] = item['_index']
-                # 通过 Cache 降低插件的处理频率
-                msg['_cache'] = '{}:{}'.format(msg['ip'], msg['port'])
-                if msg['pro'] == 'HTTP' or msg['pro'] == 'HTTPS':
-                    msg['_cache'] = msg['url']
-
-                cacheMsg = cache.get(msg['_cache'])
-                if cacheMsg:
-                    output('Use cached result, key={}'.format(msg['_cache']), 'DEBUG')
-                    ret = update(es, item['_index'], item['_id'], cacheMsg)
-                    if not ret:
-                        output('Update {} error.'.format(item['_id']), 'ERROR')
-                    time.sleep(0.1)
-                    continue
-
                 # 使用单独的插件调用插件
                 threadList[i] = threading.Thread(target=filter, args=(i, options, msg, pluginInstances[i]))
                 threadList[i].setDaemon(True)
                 threadList[i].start()
-                
-            time.sleep(2)
+                processed = True
+                break
+            
+            # 如果没有可用线程，则放回队列等待线程
+            if not processed:
+                print('No free thread. waiting...')
+                data.append(item)
+                cache.delete(item['_id'])
+                time.sleep(0.2)
+            
         except KeyboardInterrupt:
             print('[!] Ctrl+C, Exiting ...')
             break
@@ -325,8 +372,8 @@ def usage():
     """
     parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.1')
     parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', help='Elasticsearch server address:port list, like localhost:9200,...')
-    parser.add_option('-i', '--index', action='store', dest='index', type='string', default='passets', help='Elasticsearch index name')
-    parser.add_option('-r', '--range', action='store', dest='range', type='string', default='5m', help='Elasticsearch search time range, like: 15m, 24h, 7d')
+    parser.add_option('-i', '--index', action='store', dest='index', type='string', default='logstash-passets', help='Elasticsearch index name')
+    parser.add_option('-r', '--range', action='store', dest='range', type='string', default='15m', help='Elasticsearch search time range, like: 15m, 24h, 7d')
     parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
