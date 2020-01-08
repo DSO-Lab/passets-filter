@@ -54,7 +54,8 @@ class Plugin(object):
         """
         pluginPath = os.path.join(rootdir, Plugin.__pluginPath)
         if not os.path.isdir(pluginPath):
-            raise EnvironmentError('%s is not a directory' % pluginPath)
+            print('[-] {} is not a directory'.format(pluginPath))
+            return []
 
         # 将插件路径加入环境变量
         sys.path.insert(0, pluginPath)
