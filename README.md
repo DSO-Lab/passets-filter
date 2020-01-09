@@ -58,22 +58,31 @@ src                      # 核心代码文件
 用法: python3 main.py [OPTIONS] arg
 
 OPTIONS:
-  --version                     输出版本信息
-  -h, --help                    显示命令行帮助信息
-  -H HOST, --host=HOST          设置 Elasticsearch 服务器地址/地址:端口
-  -i INDEX, --index=INDEX       设置 Elasticsearch 索引名，默认为logstash-passets，程序会自动在后面追加通配符(*
-  -r RANGE, --range=RANGE 设置 Elasticsearch 查询的最小时间单位（从当前时间往前推），默认为2m（2分钟），有效的单位有秒（s）、分钟（m）、小时（h）、天（d）、月（M）、年（y）
-  -t THREADS, --threads=THREADS 设置并发线程数量，默认为1个线程
+  --version                             输出版本信息
+  -h,           --help                  显示命令行帮助信息
+  -H HOST,      --host=HOST             设置 Elasticsearch 服务器地址/地址:端口
+  -i INDEX,     --index=INDEX           设置 ES 索引名，默认为logstash-passets
+  -r RANGE,     --range=RANGE           设置 ES 搜索的时间偏移量，单位为分钟，默认 15 分钟
+  -t THREADS,   --threads=THREADS       设置并发线程数量，默认为 10 个线程
+  -b BATCH_SIZE --batch-size=BATCH_SIZE 每线程单批处理的数据数量，默认为 20 条。
   -c CACHE_SIZE --cache-size=CACHE_SIZE 设置处理缓存的大小
-  -d DEBUG, --debug=DEBUG       调试信息开关，0-关闭，1-开启
+  -m MODE       --mode=MODE             设置工作模式，默认为 1（主），可选值有 0（从）。
+  -d DEBUG, --debug=DEBUG               调试信息开关，0-关闭，1-开启
 ```
 
 **使用示例：**
 
 ```
 # 并发10个线程处理 192.168.1.2:9200 中 logstash-passets* 索引下的数据，执行过程输出调试信息
-python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5m -t 10 -d 1
+
+# 主节点模式
+python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5 -t 10 -m 1 -d 1
+
+# 从节点模式
+python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5 -t 10 -m 0 -d 1
 ```
+
+在设备性能允许的情况下尽量选用单节点多线程模式，综合对比来阿康单节点比多节点性能上更优（节点数*线程数）。多节点部署时只能、并且必须有一个主节点。
 
 ## 清洗程序配置说明
 
@@ -95,56 +104,16 @@ nmap:
 
 ### 容器构建
 
-Dockerfile:
-```
-FROM rackspacedot/python37:latest
+配置文件：
+[Dockerfile](./Dockerfile)
 
-LABEL maintainer="tanjelly@gmail.com" version="<ver>"
-
-USER root
-
-ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" THREADS=10 CACHE_SIZE=1024 DEBUG=0
-
-COPY src/ /opt/filter/
-
-WORKDIR /opt/
-
-RUN pip3 install -r requirements.txt && \
-    apt-get clean all && \
-    apt-get autoclean && \
-    apt-get autoremove
-
-ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H ELASTICSEARCH_URL -i $ELASTICSEARCH_INDEX -t $THREADS -c $CACHE_SIZE -d $DEBUG"]
-```
-
-docker-compose.yml
+[docker-compose.yml](./docker-compose.yml)
 
 ```
-version: "3"
-
-services:
-  filter:
-    build: .
-    image: dsolab/passets-filter:<ver>
-    container_name: passets-filter
-    environment:
-      - ELASTICSEARCH_URL=<elasticsearch-host>:9200
-      - ELASTICSEARCH_INDEX=logstash-passets
-      - RANGE=5m
-      - THREADS=20
-      - CACHE_SIZE=1024
-      - DEBUG=0
-    volumes:
-      - ./src/config/plugin.yml:/opt/filter/config/plugin.yml
-      - ./src/rules/apps.json:/opt/filter/rules/apps.json
-      - ./src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes
-```
-
-构建命令：
-
-```
+# 使用 docker 命令构建
 docker build -t dsolab/passets-filter:<ver> .
-或者
+
+# 使用 docker-compose 命令构建
 docker-compose build
 ```
 
@@ -158,9 +127,10 @@ docker run -it dsolab/passets-filter:<ver>
 
 # 使用新的配置文件、指纹规则启动：
 docker run -it passets-filter:<ver> -v $(PWD)/src/config/plugin.yml:/opt/filter/config/plugin.yml -v $(PWD)/src/rules/apps.json:/opt/filter/rules/apps.json -v $(PWD)/src/rules/nmap-service-probes:/opt/filter/rules/nmap-service-probes -e ELASTICSEARCH_URL=<elasticsearch>:9200
+# 注：其它参数均使用默认设置
 ```
 
-使用 docker-compose 启动：
+> 使用 docker-compose 启动：
 
 ```
 docker-compose up -d

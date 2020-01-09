@@ -22,12 +22,13 @@ from datetime import datetime, timedelta
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 from elasticsearch.helpers import BulkIndexError
-from elasticsearch.exceptions import ConnectionError, ConflictError, ConnectionTimeout
+from elasticsearch.exceptions import ConnectionError, ConflictError, ConnectionTimeout, NotFoundError, TransportError
 from cacheout import Cache
 from plugins import Plugin
 
 debug = False
 logger= None
+es = None
 # Search params
 lastTime = None
 scrollId = None
@@ -159,7 +160,7 @@ def index_template(es, name):
         output("ES connect error.", LogLevel.ERROR)
         quit(1)
     except Exception as e:
-        output(e, LogLevel.ERROR)
+        output(traceback.format_exc(), LogLevel.ERROR)
 
 def set_scroll(es, scroll_id, last_time):
     """
@@ -191,23 +192,23 @@ def get_scroll(es):
         traceback.print_exc()
         return (None, None)
 
-def search_by_time(es, index, time_range=15, size=10):
+def search_by_time(es, index, time_range=15, size=10, mode=0):
     """
     从 ES 上搜索符合条件的数据
     :param es: ES 连接对象
     :param index: ES 索引名
+    :param time_range: 默认时间节点（当前时间往前分钟数）
+    :param size: 搜索分页大小
+    :param mode: 实例工作模式
     :return: 搜索结果列表
     """
     global scrollId, lastTime, threadLock
 
     # 有 Scroll 的先走 Scroll
+    scroll_reloaded = False
     if scrollId:
         try:
-            ret = es.scroll(scroll='5m', scroll_id=scrollId, body={ "scroll_id": scrollId })
-            if '_scroll_id' in ret and ret['_scroll_id'] != scrollId:
-                print('Update scroll id')
-                scrollId = ret['_scroll_id']
-
+            ret = es.scroll(scroll='3m', scroll_id=scrollId, body={ "scroll_id": scrollId })
             count = len(ret['hits']['hits'])
             if count > 0:
                 try:
@@ -219,20 +220,47 @@ def search_by_time(es, index, time_range=15, size=10):
                 except:
                     pass
             else:
-                print('Scroll result is null.')
+                # 处理几种常见错误
                 if ret['_shards']['failed'] > 0:
                     error_info = json.dumps(ret['_shards']['failures'])
                     if 'search_context_missing_exception' in error_info:
-                        scrollId = None
-                        raise Exception('Scroll id missing.')
+                        # Scroll 失效
+                        if mode:
+                            es.clear_scroll(scroll_id=scrollId)
+                            raise NotFoundError('Search scroll context missing.')
+                    elif 'search.max_open_scroll_context' in error_info:
+                        # Scroll 太多，清除后重新生成
+                        if mode:
+                            es.clear_scroll(scroll_id='_all')
+                            raise NotFoundError('Search scroll context peaked, cleaning ...')
+                    elif 'null_pointer_exception' in error_info:
+                        # https://github.com/elastic/elasticsearch/issues/35860
+                        pass
+                    else:
+                        output(error_info, LogLevel.INFO)
+                        return []
+                
+                if mode:
+                    es.clear_scroll(scroll_id=scrollId)
+                    scroll_reloaded = True
+                raise Exception('Scroll result is null.')
 
             return ret['hits']['hits']
+        except NotFoundError:
+            scroll_reloaded = True
         except Exception as e:
-            output(e, LogLevel.ERROR)
-            try:
-                es.clear_scroll(scroll_id=scrollId, body={ "scroll_id": scrollId })
-            except:
-                pass
+            output(e, LogLevel.DEBUG)
+            output(traceback.format_exc(), LogLevel.DEBUG)
+
+    # 从节点不主动创建 Scroll，只从 ES 上获取
+    if not mode:
+        time.sleep(2)
+        output('Fetch new scroll...', LogLevel.DEBUG)
+        (scrollId, lastTime) = get_scroll(es)
+        return []
+
+    # 意外导致的无结果直接返回
+    if not scroll_reloaded: return []
 
     # 默认查询最近x分钟的数据
     if not lastTime:
@@ -257,8 +285,7 @@ def search_by_time(es, index, time_range=15, size=10):
     
     try:
         output('Start new search context...', LogLevel.DEBUG)
-        #output(query, LogLevel.DEBUG)
-        ret = es.search(index=index, body=query, scroll='5m')
+        ret = es.search(index=index, body=query, scroll='3m')
         if len(ret['hits']['hits']) > 0:
             ctime = None
             try:
@@ -271,9 +298,10 @@ def search_by_time(es, index, time_range=15, size=10):
                 lastTime = ctime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         
         if '_scroll_id' in ret:
-            print('[Search]New scroll id: {}'.format(ret['_scroll_id']))
+            output('Use new scroll id', LogLevel.DEBUG)
             scrollId = ret['_scroll_id']
         
+        # 保存 scroll_id 供其它实例使用
         set_scroll(es, scrollId, lastTime)
 
         output('Search {} documents.'.format(len(ret['hits']['hits'])), LogLevel.DEBUG)
@@ -283,6 +311,7 @@ def search_by_time(es, index, time_range=15, size=10):
         time.sleep(2)
     except Exception as e:
         output(e, LogLevel.ERROR)
+        traceback.print_exc()
 
     return []
 
@@ -304,7 +333,7 @@ def batch_update(es, docs, max_retry=3):
             if 'update' in _ and '_id' in _['update']:
                 ret.append(_['update']['_id'])
 
-        output(e.args[0], LogLevel.ERROR)
+        output(e.args[0], LogLevel.DEBUG)
     except ConnectionTimeout as ce:
         # 重试三次
         if max_retry > 0:
@@ -313,7 +342,7 @@ def batch_update(es, docs, max_retry=3):
         else:
             output(ce, LogLevel.ERROR)
     except:
-        traceback.print_exc()
+        output(traceback.print_exc(), LogLevel.INFO)
 
     #output('Batch update time: {}'.format(time.time() - ctime), LogLevel.DEBUG)
     return ret
@@ -324,7 +353,7 @@ def filter_thread(threadId, options):
     :param threadId: 线程序号
     :param options: 程序参数
     """
-    global cacheIds, cache, threadExit, threadLock, processCount
+    global es, cacheIds, cache, threadExit, threadLock, processCount
 
     # 加载插件列表
     plugins = Plugin.loadPlugins(options.rootdir, options.debug)
@@ -332,17 +361,17 @@ def filter_thread(threadId, options):
 
     if len(plugins) == 0: return
 
-    es = Elasticsearch(hosts=options.hosts)
+    #es = Elasticsearch(hosts=options.hosts)
     while True:
         if threadExit: break
 
         try:
             threadLock.acquire()
-            data = search_by_time(es, options.index + '*', time_range=options.range, size=options.batch_size)
+            data = search_by_time(es, options.index + '*', time_range=options.range, size=options.batch_size, mode=options.mode)
             threadLock.release()
 
             if not data:
-                print('[!] Thread {}: No new msg, waiting 2 seconds ...'.format(threadId))
+                output('[!] Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), 'DEBUG')
                 time.sleep(2)
                 if threadExit: break
                 continue
@@ -387,7 +416,6 @@ def filter_thread(threadId, options):
                 # 冲突或已处理的直接跳过
                 if item['_id'] in conflict_list: continue
                 
-                #print('[!] Thread {}: id={}'.format(threadId, item['_id']))
                 msg = item['_source']
                 # 通过 Cache 降低插件的处理频率
                 cache_key = '{}:{}'.format(msg['ip'], msg['port'])
@@ -396,7 +424,7 @@ def filter_thread(threadId, options):
 
                 cacheMsg = cache.get(cache_key)
                 if cacheMsg:
-                    #output('[!] Thread {}: Use cached result, key={}'.format(threadId, cache_key), LogLevel.DEBUG)
+                    output('[!] Thread {}: Use cached result, key={}'.format(threadId, cache_key), LogLevel.DEBUG)
                     actions.append({
                         '_type': item['_type'],
                         '_op_type': 'update', 
@@ -438,13 +466,13 @@ def filter_thread(threadId, options):
 
             # 提交到 ES
             if len(actions) > 0:
-                output('[!] Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.INFO)
+                output('[!] Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.DEBUG)
                 output('[!] Thread {}: {}'.format(threadId, json.dumps(actions)), LogLevel.DEBUG)
                 batch_update(es, actions)
                 actions = []
 
         except:
-            traceback.print_exc()
+            output(traceback.format_exc(), LogLevel.ERROR)
 
 
 def main(options):
@@ -452,7 +480,7 @@ def main(options):
     主函数
     :param options: 命令行传入参数对象
     """
-    global cacheIds, cache, threadLock, debug, processCount, threadExit, startTime, scrollId, lastTime
+    global es, cacheIds, cache, threadLock, debug, processCount, threadExit, startTime, scrollId, lastTime
     
     debug = options.debug
     cacheIds = Cache(maxsize=512, ttl=60, timer=time.time, default=None)
@@ -496,8 +524,9 @@ def main(options):
             print('Thread {} waiting to exit...'.format(i))
             threadList[i].join()
     
-    # 存储最后一次的搜索信息
-    set_scroll(es, scrollId, lastTime)
+    # 主节点存储最后一次的搜索信息
+    if options.mode:
+        set_scroll(es, scrollId, lastTime)
     
     quit(0)
 
@@ -521,9 +550,10 @@ def usage():
     parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', default='10.87.222.222:9200', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='logstash-passets', help='Elasticsearch index name')
     parser.add_option('-r', '--range', action='store', dest='range', type='int', default=60, help='Elasticsearch search time range, unit is minute')
-    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=1, help='Number of concurrent threads')
-    parser.add_option('-s', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread')
+    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads')
+    parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
+    parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
 
     options, args = parser.parse_args()
@@ -542,6 +572,9 @@ def usage():
 
     if options.range <= 0 or options.range > 24 * 60:
         parser.error('Please specify valid time, format is [number]，like: 15, max is 10080(7 days).')
+
+    if options.mode not in [0, 1]:
+        parser.error('Please specify valid mode: 1-master, 0-slave.')
 
     options.hosts = options.hosts.split(',')
     for i in range(len(options.hosts)):

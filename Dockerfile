@@ -4,7 +4,7 @@ LABEL maintainer="tanjelly@gmail.com" version="1.0.0"
 
 USER root
 
-ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" RANGE="5m" THREADS=10 CACHE_SIZE=1024 DEBUG=0
+ENV TZ="Asia/Shanghai" ELASTICSEARCH_URL="localhost:9200" ELASTICSEARCH_INDEX="logstash-passets" RANGE=15 THREADS=10 BATCH_SIZE=20 CACHE_SIZE=1024 MODE=1 DEBUG=0
 
 COPY src/ /opt/filter/
 
@@ -17,4 +17,4 @@ RUN apt-get update && \
     apt-get autoclean && \
     apt-get autoremove
 
-ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H $ELASTICSEARCH_URL -i $ELASTICSEARCH_INDEX -r $RANGE -c $CACHE_SIZE -t $THREADS -d $DEBUG"]
+ENTRYPOINT ["sh", "-c", "python3 /opt/filter/main.py -H $ELASTICSEARCH_URL -i $ELASTICSEARCH_INDEX -t $THREADS -r $RANGE -b $BATCH_SIZE -c $CACHE_SIZE -m $MODE -d $DEBUG"]
