@@ -251,6 +251,8 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
         except Exception as e:
             output(e, LogLevel.DEBUG)
             output(traceback.format_exc(), LogLevel.DEBUG)
+    else:
+        if mode: scroll_reloaded = True
 
     # 从节点不主动创建 Scroll，只从 ES 上获取
     if not mode:
@@ -285,6 +287,7 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
     
     try:
         output('Start new search context...', LogLevel.DEBUG)
+        output(query, LogLevel.DEBUG)
         ret = es.search(index=index, body=query, scroll='3m')
         if len(ret['hits']['hits']) > 0:
             ctime = None
@@ -547,10 +550,10 @@ def usage():
     获取命令行参数
     """
     parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.1')
-    parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', default='10.87.222.222:9200', help='Elasticsearch server address:port list, like localhost:9200,...')
+    parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', default='192.168.199.188:9200', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='logstash-passets', help='Elasticsearch index name')
     parser.add_option('-r', '--range', action='store', dest='range', type='int', default=60, help='Elasticsearch search time range, unit is minute')
-    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads')
+    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=1, help='Number of concurrent threads')
     parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
     parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave')
