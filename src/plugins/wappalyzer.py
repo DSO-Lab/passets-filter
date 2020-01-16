@@ -62,6 +62,34 @@ class Wappalyzer():
             else:
                 print('[!]' + str(msg))
 
+    def unchunk_body(self, body):
+        """
+        还原被 Chunked 响应正文
+        :param body: 被 Chunked 的 HTTP 响应正文
+        :return: 恢复的原始响应正文
+        """
+        data = ""
+        pos = body.find('\r\n')
+        while pos > 0:
+            try:
+                size = int(body[:pos], 16)
+                if size > 0:
+                    data = body[pos+2:pos+2+size]
+                    body = body[pos+2+size+2:]
+                else:
+                    body = body[pos+2+size+2:]
+                    break
+            except:
+                break
+
+            pos = body.find('\r\n')
+        
+        data += body
+        return data
+
+    def unzip(self, body):
+        pass
+
     def analyze(self, url, raw_headers, body):
         """
         根据URL、HTTP响应头、正文分析应用指纹
@@ -74,6 +102,11 @@ class Wappalyzer():
 
         #status = self.parseStatus(raw_headers)
         headers = self.parseHeaders(raw_headers)
+        if 'transfer-encoding' in headers and 'chunked' in headers['transfer-encoding']:
+            body = self.unchunk_body(body)
+        # if 'content-encoding' in headers and 'gzip' in headers['content-encoding']:
+        #     body = self.unzip(body)
+        
         cookies = self.parseCookies(headers)
         scripts = self.parseScripts(body)
         metas = self.parseMetas(body)
@@ -726,7 +759,7 @@ if __name__ == '__main__':
         "server": "nginx",
         "pro": "HTTP",
         "@timestamp": "2019-12-06T01:51:25.024Z",
-        "body": "<html><head><title>登录</title></head></html>",
+        "body": "a\r\n\u001f\b\u0000\u0000\u0000\u0000\u0000\u0000\u0003\r\n",
         "code": 200,
         "url": "http://111.206.63.16/",
         "tag": "sensor-ens160"

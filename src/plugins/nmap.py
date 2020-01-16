@@ -27,6 +27,8 @@ class FilterPlugin(Plugin):
     dst:
     - apps: 指纹信息，格式: [{name,version,os,device,info,service},...]
     """
+    os_white_list = []
+    name_regex = None
     
     def __init__(self, rootdir, debug=False, logger=None):
         """
@@ -39,6 +41,7 @@ class FilterPlugin(Plugin):
 
         # 初始化指纹相关路径
         self.loadRules(os.path.join(rootdir, 'rules', 'nmap-service-probes'))
+        self.name_regex = re.compile(r'[^\x20-\x7e]')
 
     def _readfile(self, filepath):
         """
@@ -103,6 +106,9 @@ class FilterPlugin(Plugin):
             self.rules = data['apps']
             # 预加载正则表达式
             for i in range(len(self.rules)):
+                if self.rules[i]['o']:
+                    os_prefix = self.rules[i]['o'].split('$')[0].rstrip().lower()
+                    if len(os_prefix) > 0: self.os_white_list.append(os_prefix)
                 self.rules[i]['r'] = re.compile(self.rules[i]['m'], self.rules[i]['mf'])
             return
         
@@ -145,6 +151,9 @@ class FilterPlugin(Plugin):
 
                 rule[m.group(1)] = m.group(2)
                 _ = _[:0-len(m.group(0))]
+                if m.group(1) == 'o' and m.group(2):
+                    os_prefix = m.group(2).split('$')[0].rstrip().lower()
+                    if len(os_prefix) > 0: self.os_white_list.append(os_prefix)
 
             m = regex_main.match(_)
             if not m:
@@ -158,6 +167,13 @@ class FilterPlugin(Plugin):
                     if f in regex_flags:
                         rule['mf'] |= regex_flags[f]
             
+            # 一些太短或特征不明显的规则，直接丢弃
+            if len(rule['m']) <= 1: continue
+            if rule['m'] in [
+                '^\\t$', '^\\0$', '^ok$', '^OK$', '^\\x05', '^ \\r\\n$', '^\\|$', '^00$', '^01$', '^02$', '^ $', '^1$',
+                '^\\xff$', '^1\\0$', '^A$', '^Q$', '^x0$', '^\\0\\0$', '^\\x01$', '^0\\0$']:
+                continue
+                
             tmp_rules.append(rule)
 
             new_rule = copy.deepcopy(rule)
@@ -196,8 +212,22 @@ class FilterPlugin(Plugin):
                                 if skey in app[k]:
                                     app[k] = app[k].replace(skey, m.group(i))
                     
-                    result.append(app)
-                    break
+                    available = False
+                    if app['os']:
+                        # 太长或者是存在不可见字符的，说明获取的数据不对
+                        if len(app['os']) > 30 or self.name_regex.search(app['os']): continue
+                        tmpOS = app['os'].lower()
+                        for _ in self.os_white_list:
+                            print('{} - {}'.format(tmpOS, _))
+                            if tmpOS.find(_) == 0 or _.find(tmpOS) == 0:
+                                available = True
+                                break
+                    else:
+                        available = True
+                    
+                    if available:
+                        result.append(app)
+                        break
             except Exception as e:
                 self.log(e, 'ERROR')
                 self.log(traceback.format_exc(), 'ERROR')
@@ -232,9 +262,9 @@ if __name__ == '__main__':
         "port": 80,
         "pro": "TCP",
         "host": "111.206.63.16:80",
-
+        #'data': '00',
         # Example: 554 SMTP synchronization error\r\n
-        "data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",
+        #"data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",
 
         # Example: >INFO:OpenVPN Management Interface Version 1.0.1 -- type 'help' for more info\r\n>
         #"data": "3e494e464f3a4f70656e56504e204d616e6167656d656e7420496e746572666163652056657273696f6e20312e302e31202d2d2074797065202768656c702720666f72206d6f726520696e666f0d0a3e",
@@ -243,6 +273,7 @@ if __name__ == '__main__':
         #"data": "6765745f696e666f3a20706c7567696e730a5250525420300a617366647361666173667361666173",
 
         #"data": '16030300d0010000cc03035df0c691b795581015d570c868b701ed1784528e488e9aeec4b37dad521e2de4202332000016299b175b8f0ad21daeb83a03eb5d47b57bb60ecfbd10bcd67a101d0026c02cc02bc030c02fc024c023c028c027c00ac009c014c013009d009c003d003c0035002f000a0100005d00000019001700001461637469766974792e77696e646f77732e636f6d000500050100000000000a00080006001d00170018000b00020100000d001400120401050102010403050302030202060106030023000000170000ff01000100',
+        "data": "004a56978183000100000000000013616c6572746d616e616765722d6d61696e2d3115616c6572746d616e616765722d6f706572617465640a6d6f6e69746f72696e67037376630000ff0001",
 
         "inner": False,
         "tag": "sensor-ens160"

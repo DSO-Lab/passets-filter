@@ -30,7 +30,6 @@ debug = False
 logger= None
 es = None
 # Search params
-lastTime = None
 scrollId = None
 # Cache
 cacheIds = None
@@ -86,15 +85,17 @@ def output(msg, level=LogLevel.INFO):
         else:
             print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
 
-def index_template(es, name):
+def index_template(es, name, shard_count = 1, replica_count=0):
     """
     上传索引模板
     :param es: ES 对象
     :param name: 模板名称
+    :param shard_count: 分片数量
+    :param replica_count: 副本数量
     """
     body = {
-        "index_patterns": "logstash-*",
-        "settings": { "index.refresh_interval": "5s", "number_of_shards": 1 },
+        "index_patterns": "logstash-passets*",
+        "settings": { "index.refresh_interval": "5s", "number_of_shards": shard_count, "number_of_replicas": replica_count },
         "mappings": {
             "dynamic_templates": [
                 {
@@ -117,37 +118,9 @@ def index_template(es, name):
                 "geoip": {
                     "dynamic": True,
                     "properties": {
-                        "ip": {"type": "ip"},
-                        "location": {"type": "geo_point"},
-                        "country_name": {"type": "keyword"},
-                        "city_name": {"type": "keyword"}
+                        "location": {"type": "geo_point"}
                     }
-                },
-                "ip": { "type": "ip"},
-                "ip_num": { "type": "long"},
-                "inner": {"type": "boolean"},
-                "host": {"type": "keyword"},
-                "port": {"type": "integer"},
-                "id": {"type": "keyword"},
-                "apps": {
-                    "dynamic": True,
-                    "properties": {
-                        "name": {"type": "keyword"},
-                        "confidence": {"type": "integer"},
-                        "version": {"type": "text"},
-                        "categories": {
-                            "dynamic": True,
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "name": {"type": "keyword"}
-                            }
-                        }
-                    }
-                },
-                "url": {"type": "keyword"},
-                "url_tpl": {"type": "keyword"},
-                "path": {"type": "keyword"},
-                "site": {"type": "keyword"}
+                }
             }
         }
     }
@@ -159,18 +132,16 @@ def index_template(es, name):
     except ConnectionError:
         output("ES connect error.", LogLevel.ERROR)
         quit(1)
-    except Exception as e:
+    except:
         output(traceback.format_exc(), LogLevel.ERROR)
 
-def set_scroll(es, scroll_id, last_time):
+def set_scroll(es, scroll_id):
     """
     将Scroll和最后一次查询时间记录到ES上，方便不同实例间共享
     :param scroll_id: Scroll ID
-    :param last_time: 已处理最后一条数据的时间戳
     """
     body = {
-        'scroll_id': scroll_id,
-        'last_time': last_time
+        'scroll_id': scroll_id
     }
     try:
         es.index(index='.passets-filter', id='SearchPosition', body=body, refresh=True)
@@ -184,13 +155,11 @@ def get_scroll(es):
     try:
         ret = es.get(index='.passets-filter', id="SearchPosition", _source=True)
         if 'found' in ret and ret['found']:
-            scrollId = lastTime = None
-            if 'scroll_id' in ret['_source']: scrollId = ret['_source']['scroll_id']
-            if 'last_time' in ret['_source']: lastTime = ret['_source']['last_time']
-            return (scrollId, lastTime)
+            if 'scroll_id' in ret['_source']:
+                return ret['_source']['scroll_id']
     except:
         traceback.print_exc()
-        return (None, None)
+    return None
 
 def search_by_time(es, index, time_range=15, size=10, mode=0):
     """
@@ -202,55 +171,48 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
     :param mode: 实例工作模式
     :return: 搜索结果列表
     """
-    global scrollId, lastTime, threadLock
+    global scrollId, threadLock, processCount
 
     # 有 Scroll 的先走 Scroll
     scroll_reloaded = False
     if scrollId:
         try:
             ret = es.scroll(scroll='3m', scroll_id=scrollId, body={ "scroll_id": scrollId })
-            count = len(ret['hits']['hits'])
-            if count > 0:
-                try:
-                    ctime = get_datetime(ret['hits']['hits'][-1]['_source']['@timestamp'])
-                    if ctime:
-                        ctime -= timedelta(microseconds=1000)
-                        # 更新查询截至时间
-                        lastTime = ctime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-                except:
-                    pass
+            # 处理几种常见错误
+            if ret['_shards']['failed'] > 0:
+                error_info = json.dumps(ret['_shards']['failures'])
+                if 'search_context_missing_exception' in error_info:    # Scroll 失效
+                    if mode:
+                        es.clear_scroll(scroll_id=scrollId)
+                        raise NotFoundError('Search scroll context missing.')
+                elif 'search.max_open_scroll_context' in error_info:    # Scroll 太多，清除后重新生成
+                    if mode:
+                        es.clear_scroll(scroll_id='_all')
+                        raise NotFoundError('Search scroll context peaked, cleaning ...')
+                elif 'null_pointer_exception' in error_info:
+                    # https://github.com/elastic/elasticsearch/issues/35860
+                    raise NotFoundError('Trigger a elasticsearch scroll null pointer exception.')
+                else:
+                    output(error_info, LogLevel.INFO)
+                    return []
             else:
-                # 处理几种常见错误
-                if ret['_shards']['failed'] > 0:
-                    error_info = json.dumps(ret['_shards']['failures'])
-                    if 'search_context_missing_exception' in error_info:
-                        # Scroll 失效
-                        if mode:
-                            es.clear_scroll(scroll_id=scrollId)
-                            raise NotFoundError('Search scroll context missing.')
-                    elif 'search.max_open_scroll_context' in error_info:
-                        # Scroll 太多，清除后重新生成
-                        if mode:
-                            es.clear_scroll(scroll_id='_all')
-                            raise NotFoundError('Search scroll context peaked, cleaning ...')
-                    elif 'null_pointer_exception' in error_info:
-                        # https://github.com/elastic/elasticsearch/issues/35860
-                        pass
-                    else:
-                        output(error_info, LogLevel.INFO)
-                        return []
-                
-                if mode:
-                    es.clear_scroll(scroll_id=scrollId)
-                    scroll_reloaded = True
-                raise Exception('Scroll result is null.')
+                if len(ret['hits']['hits']) > 0:
+                    return ret['hits']['hits']
+                else:
+                    # 没有数据的情况下等待2秒
+                    time.sleep(2)
+            
+            if mode:
+                es.clear_scroll(scroll_id=scrollId)
+                scroll_reloaded = True
+            
+            raise Exception('Scroll result is empty.')
 
-            return ret['hits']['hits']
         except NotFoundError:
             scroll_reloaded = True
         except Exception as e:
-            output(e, LogLevel.DEBUG)
-            output(traceback.format_exc(), LogLevel.DEBUG)
+            output(e, LogLevel.INFO)
+            #output(traceback.format_exc(), LogLevel.DEBUG)
     else:
         if mode: scroll_reloaded = True
 
@@ -258,22 +220,21 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
     if not mode:
         time.sleep(2)
         output('Fetch new scroll...', LogLevel.DEBUG)
-        (scrollId, lastTime) = get_scroll(es)
+        scrollId = get_scroll(es)
         return []
 
     # 意外导致的无结果直接返回
     if not scroll_reloaded: return []
 
     # 默认查询最近x分钟的数据
-    if not lastTime:
-        lastTime = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - time_range * 60))
+    lastTime = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - time_range * 60))
     
     query = {
         "size": size,
         "query": {
             "bool": {
                 "must": [
-                    {"range": {"@timestamp": {"gt": lastTime}}} # 查询某个时间点之后的数据，默认为当前时间前15分钟
+                    {"range": {"@timestamp": {"gte": lastTime}}} # 查询某个时间点之后的数据，默认为当前时间前15分钟
                 ],
                 "must_not": [
                     {"exists": {"field": "state"}} # 只处理没有处理状态字段的数据
@@ -281,7 +242,7 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
             }
         },
         "sort": {
-            "@timestamp": { "order": "asc" }
+            "@timestamp": { "order": "desc" }
         }
     }
     
@@ -289,23 +250,12 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
         output('Start new search context...', LogLevel.DEBUG)
         output(query, LogLevel.DEBUG)
         ret = es.search(index=index, body=query, scroll='3m')
-        if len(ret['hits']['hits']) > 0:
-            ctime = None
-            try:
-                ctime = datetime.strptime(ret['hits']['hits'][-1]['_source']['@timestamp'],'%Y-%m-%dT%H:%M:%S.%fZ') - timedelta(microseconds=1000)
-            except:
-                pass
-
-            if ctime:
-                # 更新查询截至时间
-                lastTime = ctime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        
         if '_scroll_id' in ret:
             output('Use new scroll id', LogLevel.DEBUG)
             scrollId = ret['_scroll_id']
         
-        # 保存 scroll_id 供其它实例使用
-        set_scroll(es, scrollId, lastTime)
+            # 保存 scroll_id 供其它实例使用
+            set_scroll(es, scrollId)
 
         output('Search {} documents.'.format(len(ret['hits']['hits'])), LogLevel.DEBUG)
         return ret['hits']['hits']
@@ -326,7 +276,6 @@ def batch_update(es, docs, max_retry=3):
     :param max_retry: 重试次数
     """
     ret = []
-    #ctime = time.time()
     try:
         output(docs, LogLevel.DEBUG)
         resp = bulk(es, docs)
@@ -347,7 +296,6 @@ def batch_update(es, docs, max_retry=3):
     except:
         output(traceback.print_exc(), LogLevel.INFO)
 
-    #output('Batch update time: {}'.format(time.time() - ctime), LogLevel.DEBUG)
     return ret
 
 def filter_thread(threadId, options):
@@ -360,7 +308,7 @@ def filter_thread(threadId, options):
 
     # 加载插件列表
     plugins = Plugin.loadPlugins(options.rootdir, options.debug)
-    print('Thread {}: Plugins loaded.'.format(threadId))
+    output('Thread {}: Plugins loaded.'.format(threadId), LogLevel.INFO)
 
     if len(plugins) == 0: return
 
@@ -374,7 +322,7 @@ def filter_thread(threadId, options):
             threadLock.release()
 
             if not data:
-                output('[!] Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), 'DEBUG')
+                output('[!] Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), LogLevel.DEBUG)
                 time.sleep(2)
                 if threadExit: break
                 continue
@@ -455,9 +403,7 @@ def filter_thread(threadId, options):
                 
                 # 更新数据
                 msg_update['state'] = MsgState.COMPLETED
-                #threadLock.acquire()
                 cache.set(cache_key, msg_update)
-                #threadLock.release()
 
                 actions.append({
                     '_type': item['_type'],
@@ -483,7 +429,7 @@ def main(options):
     主函数
     :param options: 命令行传入参数对象
     """
-    global es, cacheIds, cache, threadLock, debug, processCount, threadExit, startTime, scrollId, lastTime
+    global es, cacheIds, cache, threadLock, debug, processCount, threadExit, startTime, scrollId
     
     debug = options.debug
     cacheIds = Cache(maxsize=512, ttl=60, timer=time.time, default=None)
@@ -494,19 +440,10 @@ def main(options):
 
     es = Elasticsearch(hosts=options.hosts)
     # 更新索引模板
-    index_template(es, 'passets')
+    index_template(es, 'passets', shard_count=options.shard_size,replica_count=options.replica_size)
     # 获取搜索位置信息
-    (scrollId, lastTime) = get_scroll(es)
-    if lastTime:
-        tmpTime = datetime.utcnow() - timedelta(minutes=options.range)
-        tmpLastTime = get_datetime(lastTime)
-        if not tmpLastTime or tmpLastTime < tmpTime:
-            lastTime = tmpTime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    scrollId = get_scroll(es)
 
-        print('Last Time Position: {}'.format(lastTime))
-    
-    startTime = time.time()
-    
     try:
         for i in range(options.threads):
             threadList[i] = threading.Thread(target=filter_thread, args=(i, options))
@@ -515,7 +452,7 @@ def main(options):
             time.sleep(1)
 
         while True:
-            time.sleep(5)    
+            time.sleep(5)
     except KeyboardInterrupt:
         print('[!] Ctrl+C, exiting ...')
         threadLock.acquire()
@@ -526,10 +463,6 @@ def main(options):
         if threadList[i] and threadList[i].isAlive():
             print('Thread {} waiting to exit...'.format(i))
             threadList[i].join()
-    
-    # 主节点存储最后一次的搜索信息
-    if options.mode:
-        set_scroll(es, scrollId, lastTime)
     
     quit(0)
 
@@ -556,6 +489,8 @@ def usage():
     parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=1, help='Number of concurrent threads')
     parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
+    parser.add_option('-R', '--replica-size', action='store', dest='replica_size', type='int', default=0, help='ES cluster replica size')
+    parser.add_option('-s', '--shard-size', action='store', dest='shard_size', type='int', default=0, help='ES shard size')
     parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
 
@@ -578,6 +513,10 @@ def usage():
 
     if options.mode not in [0, 1]:
         parser.error('Please specify valid mode: 1-master, 0-slave.')
+
+    if options.shard_size < 1: options.shard_size = 1
+
+    if options.replica_size < 0: options.replica_size = 0
 
     options.hosts = options.hosts.split(',')
     for i in range(len(options.hosts)):
