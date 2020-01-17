@@ -215,9 +215,9 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
         "size": size,
         "query": {
             "bool": {
-                "must": [
-                    {"range": {"@timestamp": {"gte": lastTime}}} # 查询某个时间点之后的数据，默认为当前时间前15分钟
-                ],
+                # "must": [
+                #     {"range": {"@timestamp": {"gte": lastTime}}} # 查询某个时间点之后的数据，默认为当前时间前15分钟
+                # ],
                 "must_not": [
                     {"exists": {"field": "state"}} # 只处理没有处理状态字段的数据
                 ]
