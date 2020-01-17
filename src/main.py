@@ -74,24 +74,24 @@ def output(msg, level=LogLevel.INFO):
     """
     global debug, logger
     if logger:
-        if level == LogLevel.DEBUG:
+        if level >= LogLevel.DEBUG:
             logger.debug(str(msg))
-        elif level == LogLevel.WARN:
+        elif level >= LogLevel.WARN:
             logger.warn(str(msg))
-        elif level == LogLevel.ERROR:
+        elif level >= LogLevel.ERROR:
             logger.error(str(msg))
         else:
             logger.info(str(msg))
     else:
-        if level == LogLevel.ERROR:
-            print('[E][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-        elif level == LogLevel.WARN:
-            print('[W][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-        elif level == LogLevel.DEBUG:
+        if level >= LogLevel.ERROR:
+            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        elif level >= LogLevel.WARN:
+            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        elif level >= LogLevel.DEBUG:
             if debug:
                 print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         else:
-            print('[I][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            print('[+][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
 
 def index_template(es):
     """

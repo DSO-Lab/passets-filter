@@ -223,12 +223,7 @@ class Wappalyzer():
             if _['keyword'] not in js: continue
 
             if not _['regex']:
-                result.append({
-                    "name": _['name'],
-                    "confidence": _['confidence'],
-                    "version": _['version'],
-                    "product": _['product']
-                })
+                result.append(self.makeDetected(None, _))
             else:
                 match = _['regex'].search(js[_['keyword']])
                 if match:
@@ -249,12 +244,7 @@ class Wappalyzer():
             if _['keyword'] not in metas: continue
 
             if not _['regex']:
-                result.append({
-                    "name": _['name'],
-                    "confidence": _['confidence'],
-                    "version": _['version'],
-                    "product": _['product']
-                })
+                result.append(self.makeDetected(None, _))
             else:
                 for item in metas[_['keyword']]:
                     match = _['regex'].search(item)
@@ -293,12 +283,7 @@ class Wappalyzer():
             if _['keyword'] not in cookies: continue
 
             if not _['regex']:
-                result.append({
-                    "name": _['name'],
-                    "confidence": _['confidence'],
-                    "version": _['version'],
-                    "product": _['product']
-                })
+                result.append(self.makeDetected(None, _))
             else:
                 match = _['regex'].search(cookies[_['keyword']])
                 if match:
@@ -319,12 +304,7 @@ class Wappalyzer():
             if _['keyword'] not in headers: continue
 
             if not _['regex']:
-                result.append({
-                    "name": _['name'],
-                    "confidence": _['confidence'],
-                    "version": _['version'],
-                    "product": _['product']
-                })
+                result.append(self.makeDetected(None, _))
             else:
                 for headValue in headers[_['keyword']]:
                     match = _['regex'].search(headValue)
@@ -356,19 +336,25 @@ class Wappalyzer():
         :param rule: 匹配规则
         :return: {name,confidence,version,product}
         """
-        result = { "name": rule['name'], "confidence": rule['confidence'], "version": rule['version'], "product": None }
+        result = {
+            "name": rule['name'],
+            "confidence": rule['confidence'],
+            "version": None if 'version' not in rule else rule['version'],
+            "product": None if 'product' not in rule else rule['product']
+        }
 
-        if match.lastindex:
+        if match:
+            if match.lastindex:
+                for k in ['version', 'product']:
+                    if rule[k]:
+                        for i in range(1, match.lastindex + 1):
+                            result[k] = result[k].replace(r'\{}'.format(i), match.group(i))
+            
             for k in ['version', 'product']:
                 if rule[k]:
-                    for i in range(1, match.lastindex + 1):
-                        result[k] = result[k].replace(r'\{}'.format(i), match.group(i))
-        
-        for k in ['version', 'product']:
-            if rule[k]:
-                patterns = re.findall(r'\\\d', rule[k])
-                for _ in patterns:
-                    result[k] = result[k].replace(_, '')
+                    patterns = re.findall(r'\\\d', rule[k])
+                    for _ in patterns:
+                        result[k] = result[k].replace(_, '')
 
         return result
         
@@ -512,8 +498,11 @@ class Wappalyzer():
         if not rawHeaders: return {}
 
         lines = rawHeaders.split('\r\n')
+        if len(lines) > 0 and lines[0][:5] == 'HTTP/': del(lines[0]) # 删除 HTTP/x.x 这一行
+
         result = {}
-        for i in range(1, len(lines)): # 跳过第一行
+        for i in range(0, len(lines)):
+            
             pos = lines[i].find(':')
             if pos == -1: continue
             
@@ -541,8 +530,8 @@ class Wappalyzer():
 
                 name = _[:pos]
                 if name not in ['domain', 'path']:
-                    cookies[name] = _[pos+1].strip()
-                    break
+                    cookies[name] = _[pos+1:].strip()
+                    continue
 
         return cookies
 
