@@ -57,6 +57,10 @@ class LogLevel:
     DEBUG = 5
 
 def get_datetime(time_str):
+    """
+    时间字符串转时间对象
+    :param time_str: 时间字符串
+    """
     try:
         return datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
     except:
@@ -65,6 +69,8 @@ def get_datetime(time_str):
 def output(msg, level=LogLevel.INFO):
     """
     输出信息
+    :param msg: 消息内容
+    :param level: 消息级别
     """
     global debug, logger
     if logger:
@@ -78,56 +84,32 @@ def output(msg, level=LogLevel.INFO):
             logger.info(str(msg))
     else:
         if level == LogLevel.ERROR:
-            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            print('[E][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+        elif level == LogLevel.WARN:
+            print('[W][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         elif level == LogLevel.DEBUG:
             if debug:
                 print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         else:
-            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            print('[I][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
 
-def index_template(es, name, shard_count = 1, replica_count=0):
+def index_template(es):
     """
     上传索引模板
     :param es: ES 对象
-    :param name: 模板名称
-    :param shard_count: 分片数量
-    :param replica_count: 副本数量
     """
     body = {
-        "index_patterns": "logstash-passets*",
-        "settings": { "index.refresh_interval": "5s", "number_of_shards": shard_count, "number_of_replicas": replica_count },
+        "index_patterns": ".passets-filter",
+        "settings": { "refresh_interval": "5s", "number_of_shards": 1, "auto_expand_replicas": "0-1" },
         "mappings": {
-            "dynamic_templates": [
-                {
-                    "string_fields": {
-                        "match": "*",
-                        "match_mapping_type": "string", 
-                        "mapping": {
-                            "type": "text",
-                            "norms": False,
-                            "fields": {
-                                "keyword": { "type": "keyword", "ignore_above": 256 }
-                            }
-                        }
-                    }
-                }
-            ],
             "properties": {
-                "@timestamp": { "type": "date"},
-                "@version": {"type": "keyword"},
-                "geoip": {
-                    "dynamic": True,
-                    "properties": {
-                        "location": {"type": "geo_point"}
-                    }
-                }
+                "scroll_id": { "type": "text"}
             }
         }
     }
 
     try:
-        output(body, LogLevel.INFO)
-        ret = es.indices.put_template(name=name, body=body, create=False)
+        ret = es.indices.put_template(name="passets-config", body=body, create=False)
         output(ret, LogLevel.DEBUG)
     except ConnectionError:
         output("ES connect error.", LogLevel.ERROR)
@@ -322,7 +304,7 @@ def filter_thread(threadId, options):
             threadLock.release()
 
             if not data:
-                output('[!] Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), LogLevel.DEBUG)
+                output('Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), LogLevel.WARN)
                 time.sleep(2)
                 if threadExit: break
                 continue
@@ -375,7 +357,7 @@ def filter_thread(threadId, options):
 
                 cacheMsg = cache.get(cache_key)
                 if cacheMsg:
-                    output('[!] Thread {}: Use cached result, key={}'.format(threadId, cache_key), LogLevel.DEBUG)
+                    output('Thread {}: Use cached result, key={}'.format(threadId, cache_key), LogLevel.DEBUG)
                     actions.append({
                         '_type': item['_type'],
                         '_op_type': 'update', 
@@ -389,7 +371,7 @@ def filter_thread(threadId, options):
                 # 按插件顺序对数据进行处理（插件顺序在配置文件中定义）
                 for i in sorted(plugins.keys()):
                     (pluginName, plugin) = plugins[i]
-                    output('[!] Thread {}: Plugin {} processing ...'.format(threadId, pluginName), LogLevel.DEBUG)
+                    output('Thread {}: Plugin {} processing ...'.format(threadId, pluginName), LogLevel.DEBUG)
 
                     try:
                         ret = plugin.execute(msg)
@@ -399,7 +381,7 @@ def filter_thread(threadId, options):
                     except:
                         output(traceback.format_exc(), LogLevel.ERROR)
                     
-                    output('[!] Thread {}: Plugin {} completed.'.format(threadId, pluginName), LogLevel.DEBUG)
+                    output('Thread {}: Plugin {} completed.'.format(threadId, pluginName), LogLevel.DEBUG)
                 
                 # 更新数据
                 msg_update['state'] = MsgState.COMPLETED
@@ -415,8 +397,8 @@ def filter_thread(threadId, options):
 
             # 提交到 ES
             if len(actions) > 0:
-                output('[!] Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.DEBUG)
-                output('[!] Thread {}: {}'.format(threadId, json.dumps(actions)), LogLevel.DEBUG)
+                output('Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.DEBUG)
+                output('Thread {}: {}'.format(threadId, json.dumps(actions)), LogLevel.DEBUG)
                 batch_update(es, actions)
                 actions = []
 
@@ -433,14 +415,14 @@ def main(options):
     
     debug = options.debug
     cacheIds = Cache(maxsize=512, ttl=60, timer=time.time, default=None)
-    cache = Cache(maxsize=options.cache_size, ttl=600, timer=time.time, default=None)
+    cache = Cache(maxsize=options.cache_size, ttl=options.cache_ttl, timer=time.time, default=None)
 
     threadLock = threading.RLock()
     threadList = [None for i in range(options.threads)]
 
     es = Elasticsearch(hosts=options.hosts)
     # 更新索引模板
-    index_template(es, 'passets', shard_count=options.shard_size,replica_count=options.replica_size)
+    index_template(es)
     # 获取搜索位置信息
     scrollId = get_scroll(es)
 
@@ -454,7 +436,7 @@ def main(options):
         while True:
             time.sleep(5)
     except KeyboardInterrupt:
-        print('[!] Ctrl+C, exiting ...')
+        print('Ctrl+C, exiting ...')
         threadLock.acquire()
         threadExit = True
         threadLock.release()
@@ -483,15 +465,14 @@ def usage():
     获取命令行参数
     """
     parser = optparse.OptionParser(usage="python3 %prog [OPTIONS] ARG", version='%prog 1.0.1')
-    parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', default='192.168.199.188:9200', help='Elasticsearch server address:port list, like localhost:9200,...')
+    parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='logstash-passets', help='Elasticsearch index name')
-    parser.add_option('-r', '--range', action='store', dest='range', type='int', default=60, help='Elasticsearch search time range, unit is minute')
-    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=1, help='Number of concurrent threads')
-    parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread')
-    parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size')
-    parser.add_option('-R', '--replica-size', action='store', dest='replica_size', type='int', default=0, help='ES cluster replica size')
-    parser.add_option('-s', '--shard-size', action='store', dest='shard_size', type='int', default=0, help='ES shard size')
-    parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave')
+    parser.add_option('-r', '--range', action='store', dest='range', type='int', default=15, help='Elasticsearch search time range, unit is minute, default is 15 minutes.')
+    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads, default is 10')
+    parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread, default is 20.')
+    parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size, default is 1024.')
+    parser.add_option('-T', '--cache-ttl', action='store', dest='cache_ttl', type='int', default=600, help='Process cache time to live(TTL), default is 600 seconds.')
+    parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave, default is 1.')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
 
     options, args = parser.parse_args()
@@ -505,18 +486,17 @@ def usage():
     if options.batch_size < 5 or options.batch_size > 200:
         parser.error('Please specify valid thread count, the valid range is 5-200. Default is 20.')
 
-    if options.cache_size < 1 or options.cache_size > 65535:
-        parser.error('Please specify valid thread count, the valid range is 1-65535. Default is 1024.')
+    if options.cache_size < 1 or options.cache_size > 4096:
+        parser.error('Please specify valid thread count, the valid range is 1-4096. Default is 1024.')
+
+    if options.cache_ttl < 60 or options.cache_ttl > 24 * 60 * 60:
+        parser.error('Please specify valid thread count, the valid range is 1 minutes to 1 days. Default is 600(5 minutes).')
 
     if options.range <= 0 or options.range > 24 * 60:
         parser.error('Please specify valid time, format is [number]，like: 15, max is 10080(7 days).')
 
     if options.mode not in [0, 1]:
         parser.error('Please specify valid mode: 1-master, 0-slave.')
-
-    if options.shard_size < 1: options.shard_size = 1
-
-    if options.replica_size < 0: options.replica_size = 0
 
     options.hosts = options.hosts.split(',')
     for i in range(len(options.hosts)):
@@ -530,6 +510,6 @@ def usage():
 
 if __name__ == '__main__':
     options = usage()
-    print('[!] Home: {}'.format(options.rootdir))
+    print('Home: {}'.format(options.rootdir))
 
     main(options)

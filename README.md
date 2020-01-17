@@ -66,6 +66,7 @@ OPTIONS:
   -t THREADS,   --threads=THREADS       设置并发线程数量，默认为 10 个线程
   -b BATCH_SIZE --batch-size=BATCH_SIZE 每线程单批处理的数据数量，默认为 20 条。
   -c CACHE_SIZE --cache-size=CACHE_SIZE 设置处理缓存的大小
+  -T CACHE_TTL  --cache-ttl=CACHE_TTL   设置处理缓存的过期时间，单位为秒，默认 600 秒
   -m MODE       --mode=MODE             设置工作模式，默认为 1（主），可选值有 0（从）。
   -d DEBUG, --debug=DEBUG               调试信息开关，0-关闭，1-开启
 ```
