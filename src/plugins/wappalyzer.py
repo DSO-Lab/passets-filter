@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-30
+Modified: 20120-01-19
 '''
 
 import os
@@ -15,7 +15,8 @@ import base64
 import traceback
 import logging
 
-from plugin import Plugin
+from datetime import datetime
+from plugin import Plugin, LogLevel
 
 class Wappalyzer():
     _rules = None
@@ -29,16 +30,18 @@ class Wappalyzer():
     _metaRegex1 = re.compile(r'<meta\s+(?:name|http-equiv)=[\'"]([^\'"]+)[\'"]\s+content=[\'"]([^>]*?)[\'"]', re.I)
     _metaRegex2 = re.compile(r'<meta\s+content=[\'"]([^>]*?)[\'"]\s+(?:name|http-equiv)=[\'"]([^\'"]+)[\'"]', re.I)
     
-    def __init__(self, rule_file, wapp_path=None, logger=None):
+    def __init__(self, rule_file, wapp_path=None, logger=None, debug=LogLevel.ERROR):
         """
         构造函数
         :param rule_file: wappalyzer 规则库文件路径
         :param wapp_path: 修改版 wappalyzer 程序路径(非必填)
         :param logger: 日志处理对象
+        :param debug: 调试开关
         """
         self._logger = logger
         self._wapp_path = wapp_path
         self._rule_file = rule_file
+        self._debug = debug
 
         if not os.path.exists(rule_file):
             raise Exception('Wappalyzer rule file not found.')
@@ -46,21 +49,28 @@ class Wappalyzer():
         if not self.loadRules(rule_file):
             raise Exception('Wappalyzer rules load failed.')
 
-    def log(self, msg, level='INFO'):
+    def log(self, msg, level=LogLevel.ERROR):
+        if level > self._debug: return
+
         if self._logger:
-            if level == 'ERROR':
-                self._logger.debug(str(msg))
-            elif level == 'DEBUG':
+            if level == LogLevel.ERROR:
                 self._logger.error(str(msg))
-            else:
+            elif level == LogLevel.WARN:
+                self._logger.warn(str(msg))
+            elif level == LogLevel.INFO:
                 self._logger.info(str(msg))
-        else:
-            if level == 'ERROR':
-                print('[-]' + str(msg))
-            elif level == 'DEBUG':
-                print('[^]' + str(msg))
             else:
-                print('[!]' + str(msg))
+                self._logger.debug(str(msg))
+        else:
+            timeStr = datetime.now().strftime('%H:%M:%S.%f')
+            if level == LogLevel.ERROR:
+                print('[E][{}] {}'.format(timeStr, str(msg)))
+            elif level == LogLevel.WARN:
+                print('[W][{}] {}'.format(timeStr, str(msg)))
+            elif level == LogLevel.INFO:
+                print('[I][{}] {}'.format(timeStr, str(msg)))
+            else:
+                print('[D][{}] {}'.format(timeStr, str(msg)))
 
     def unchunk_body(self, body):
         """
@@ -435,8 +445,8 @@ class Wappalyzer():
 
             return True
         except Exception as e:
-            self.log(str(e), 'ERROR')
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return False
         finally:
             if fp: fp.close()
@@ -473,8 +483,8 @@ class Wappalyzer():
                     result['product'] = item[pos+1:]
             return result
         except Exception as e:
-            self.log(str(e), 'ERROR')
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return None
 
     def parseStatus(self, rawHeaders):
@@ -582,7 +592,7 @@ class Wappalyzer():
         :return: 指纹列表
         """
         if not os.path.exists(self._wapp_path):
-            self.log(self._wapp_path + ' not found.', 'ERROR')
+            self.log(self._wapp_path + ' not found.', LogLevel.ERROR)
             raise Exception('Wappalyzer not exists.')
         
         url_encoded = url.replace('\\', '\\\\').replace('"', '\"')
@@ -611,14 +621,14 @@ class Wappalyzer():
                             del(result['applications'][i]['product'])
                     return result['applications']
             except Exception as e:
-                self.log(str(e), 'ERROR')
-                self.log(traceback.format_exc(), 'ERROR')
-                self.log(data, 'DEBUG')
+                self.log(str(e), LogLevel.ERROR)
+                self.log(traceback.format_exc(), LogLevel.ERROR)
+                self.log(data, LogLevel.DEBUG)
             
             fd.close()
         except Exception as e:
-            self.log('CMD: ' + cmd, 'ERROR')
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log('CMD: ' + cmd, LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
         
         return []
 
@@ -701,7 +711,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'HTTP':
-            self.log('Not http message.', 'DEBUG')
+            self.log('Not http message.', LogLevel.DEBUG)
             return
 
         info = {}

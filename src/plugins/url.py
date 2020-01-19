@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-11
+Modified: 2020-01-19
 '''
 
 import os
@@ -15,7 +15,7 @@ import base64
 import traceback
 
 from urllib import parse
-from plugin import Plugin
+from plugin import Plugin, LogLevel
 
 class FilterPlugin(Plugin):
     """
@@ -29,7 +29,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'HTTP':
-            self.log('Not http message.', 'DEBUG')
+            self.log('Not http message.', LogLevel.DEBUG)
             return None
 
         if 'url' not in msg and not isinstance(msg['url'], str):
@@ -63,10 +63,10 @@ class FilterPlugin(Plugin):
             info['path'] = path
             info['url_tpl'] = info['site'] + path_tpl
         except:
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(traceback.format_exc(), LogLevel.ERROR)
 
         return info
-
+ERROR
 if __name__ == '__main__':
     plugins = Plugin.loadPlugins(os.path.join(os.path.dirname(__file__), ".."), True)
     msg = {

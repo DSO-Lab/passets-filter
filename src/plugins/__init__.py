@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-MOdified: 2019-12-11
+MOdified: 2020-01-19
 '''
 
-from .plugin import Plugin
+from .plugin import Plugin, LogLevel

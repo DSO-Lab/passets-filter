@@ -3,15 +3,23 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-30
+Modified: 2020-01-19
 '''
 
+import importlib
 import os
 import sys
 import traceback
-import importlib
-
 from datetime import datetime
+
+
+class LogLevel:
+    """日志级别"""
+    INFO = 0
+    ERROR = 1
+    WARN = 2
+    NOTICE = 3
+    DEBUG = 4
 
 class Plugin(object):
     """
@@ -99,7 +107,7 @@ class Plugin(object):
         
         return plugins
 
-    def __init__(self, rootdir, debug=False, logger=None):
+    def __init__(self, rootdir, debug=2, logger=None):
         """
         初始化
         :param rootdir: 应用根目录
@@ -128,27 +136,33 @@ class Plugin(object):
         """
         return str.replace('\\', '\\\\').replace('"', '\"')
 
-    def log(self, msg, level='INFO'):
+    def log(self, msg, level=LogLevel.ERROR):
         """
         日志输出
-        :param msg: 日志消息
+        :param msg: 日志消息'
         :param level: 日志等级，分为 INFO、ERROR和DEBUG
         """
+        if level > self._debug: return
+
         if self._logger:
-            if level == 'ERROR':
-                self._logger.debug(str(msg))
-            elif level == 'DEBUG':
+            if level == LogLevel.ERROR:
                 self._logger.error(str(msg))
-            else:
+            elif level == LogLevel.WARN:
+                self._logger.warn(str(msg))
+            elif level == LogLevel.INFO:
                 self._logger.info(str(msg))
-        else:
-            if level == 'ERROR':
-                print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-            elif level == 'DEBUG':
-                if self._debug:
-                    print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
             else:
-                print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+                self._logger.debug(str(msg))
+        else:
+            timeStr = datetime.now().strftime('%H:%M:%S.%f')
+            if level == LogLevel.ERROR:
+                print('[E][{}] {}'.format(timeStr, str(msg)))
+            elif level == LogLevel.WARN:
+                print('[W][{}] {}'.format(timeStr, str(msg)))
+            elif level == LogLevel.INFO:
+                print('[I][{}] {}'.format(timeStr, str(msg)))
+            else:
+                print('[D][{}] {}'.format(timeStr, str(msg)))
     
     def set_config(self, config):
         """

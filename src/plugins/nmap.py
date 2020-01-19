@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-30
+Modified: 2020-01-19
 '''
 
 import os
@@ -18,7 +18,7 @@ import copy
 import traceback
 import threading
 
-from plugin import Plugin
+from plugin import Plugin, LogLevel
 
 class FilterPlugin(Plugin):
     """
@@ -54,7 +54,7 @@ class FilterPlugin(Plugin):
             fp.close()
             return data
         except:
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(traceback.format_exc(), LogLevel.ERROR)
         return None
 
     def _writefile(self, filepath, filecontent):
@@ -67,7 +67,7 @@ class FilterPlugin(Plugin):
             fp = open(filepath, encoding='utf-8', mode='w')
             fp.write(filecontent)
         except:
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(traceback.format_exc(), LogLevel.ERROR)
         finally:
             fp.close()
 
@@ -81,7 +81,7 @@ class FilterPlugin(Plugin):
             if data:
                 return json.loads(data)
         except:
-            self.log(traceback.format_exc(), 'ERROR')
+            self.log(traceback.format_exc(), LogLevel.ERROR)
         
         return None
     
@@ -157,7 +157,7 @@ class FilterPlugin(Plugin):
 
             m = regex_main.match(_)
             if not m:
-                self.log(_, 'ERROR')
+                self.log(_, LogLevel.ERROR)
                 continue
 
             rule['s'] = m.group(1)
@@ -229,8 +229,8 @@ class FilterPlugin(Plugin):
                         result.append(app)
                         break
             except Exception as e:
-                self.log(e, 'ERROR')
-                self.log(traceback.format_exc(), 'ERROR')
+                self.log(e, LogLevel.ERROR)
+                self.log(traceback.format_exc(), LogLevel.ERROR)
         
         return result
 
@@ -241,7 +241,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'pro' not in msg or msg['pro'] != 'TCP':
-            self.log('Not tcp message.', 'DEBUG')
+            self.log('Not tcp message.', LogLevel.DEBUG)
             return
 
         info = {}

@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-12
-Modified: 2019-12-30
+Modified: 2020-01-19
 '''
 
 import os
@@ -11,7 +11,7 @@ import time
 import geoip2.database
 import traceback
 
-from plugin import Plugin
+from plugin import Plugin, LogLevel
 
 class FilterPlugin(Plugin):
     _geoip = None
@@ -47,7 +47,7 @@ class FilterPlugin(Plugin):
         :return: 返回需要更新的消息字典（不含原始消息）
         """
         if 'ip' not in msg or not msg['ip']:
-            self.log('ip field not found.', 'DEBUG')
+            self.log('ip field not found.', LogLevel.DEBUG)
             return None
 
         info = { 'geo': {} }
@@ -65,7 +65,7 @@ class FilterPlugin(Plugin):
                 'lon': resp.location.longitude
             }
         except Exception as e:
-            self.log(e, 'DEBUG')
+            self.log(e, LogLevel.ERROR)
         
         return info
 

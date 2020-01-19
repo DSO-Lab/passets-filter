@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-11
+Modified: 2020-01-19
 '''
 
 import os
@@ -13,7 +13,7 @@ import socket
 import time
 import traceback
 
-from plugin import Plugin
+from plugin import Plugin, LogLevel
 
 class FilterPlugin(Plugin):
     """

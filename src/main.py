@@ -3,7 +3,7 @@
 '''
 Author: Bugfix<tanjelly@gmail.com
 Created: 2019-12-11
-Modified: 2019-12-30
+Modified: 2020-01-19
 '''
 
 import base64
@@ -24,7 +24,7 @@ from elasticsearch.helpers import bulk
 from elasticsearch.helpers import BulkIndexError
 from elasticsearch.exceptions import ConnectionError, ConflictError, ConnectionTimeout, NotFoundError, TransportError
 from cacheout import Cache
-from plugins import Plugin
+from plugins import Plugin, LogLevel
 
 debug = False
 logger= None
@@ -48,14 +48,6 @@ class MsgState:
     # 已完成
     COMPLETED = 1
 
-class LogLevel:
-    """日志级别"""
-    ERROR = 1
-    WARN = 2
-    INFO = 3
-    NOTICE = 4
-    DEBUG = 5
-
 def get_datetime(time_str):
     """
     时间字符串转时间对象
@@ -73,25 +65,28 @@ def output(msg, level=LogLevel.INFO):
     :param level: 消息级别
     """
     global debug, logger
+
+    if level > debug: return
+
     if logger:
-        if level >= LogLevel.DEBUG:
-            logger.debug(str(msg))
-        elif level >= LogLevel.WARN:
-            logger.warn(str(msg))
-        elif level >= LogLevel.ERROR:
+        if level == LogLevel.ERROR:
             logger.error(str(msg))
-        else:
+        elif level == LogLevel.WARN:
+            logger.warn(str(msg))
+        elif level == LogLevel.INFO:
             logger.info(str(msg))
-    else:
-        if level >= LogLevel.ERROR:
-            print('[-][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-        elif level >= LogLevel.WARN:
-            print('[!][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
-        elif level >= LogLevel.DEBUG:
-            if debug:
-                print('[D][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
         else:
-            print('[+][{}] {}'.format(datetime.now().strftime('%H:%M:%S.%f'), str(msg)))
+            logger.debug(str(msg))
+    else:
+        timeStr = datetime.now().strftime('%H:%M:%S.%f')
+        if level == LogLevel.ERROR:
+            print('[E][{}] {}'.format(timeStr, str(msg)))
+        elif level == LogLevel.WARN:
+            print('[W][{}] {}'.format(timeStr, str(msg)))
+        elif level == LogLevel.INFO:
+            print('[I][{}] {}'.format(timeStr, str(msg)))
+        else:
+            print('[D][{}] {}'.format(timeStr, str(msg)))
 
 def index_template(es):
     """
@@ -193,7 +188,7 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
         except NotFoundError:
             scroll_reloaded = True
         except Exception as e:
-            output(e, LogLevel.INFO)
+            output(e, LogLevel.WARN)
             #output(traceback.format_exc(), LogLevel.DEBUG)
     else:
         if mode: scroll_reloaded = True
@@ -304,7 +299,7 @@ def filter_thread(threadId, options):
             threadLock.release()
 
             if not data:
-                output('Thread {}: No new msg, waiting 2 seconds ...'.format(threadId), LogLevel.WARN)
+                output('Thread {}: No new msg, waiting 2s ...'.format(threadId), LogLevel.INFO)
                 time.sleep(2)
                 if threadExit: break
                 continue
@@ -473,7 +468,7 @@ def usage():
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size, default is 1024.')
     parser.add_option('-T', '--cache-ttl', action='store', dest='cache_ttl', type='int', default=600, help='Process cache time to live(TTL), default is 600 seconds.')
     parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave, default is 1.')
-    parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=0, help='Print debug info')
+    parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=2, help='Print debug info, 1-error, 2-warning, 3-info, 4-debug, default is 2.')
 
     options, args = parser.parse_args()
     options.rootdir = os.path.split(os.path.abspath(sys.argv[0]))[0]
@@ -497,6 +492,8 @@ def usage():
 
     if options.mode not in [0, 1]:
         parser.error('Please specify valid mode: 1-master, 0-slave.')
+
+    if options.debug < 0: options.debug = 2
 
     options.hosts = options.hosts.split(',')
     for i in range(len(options.hosts)):
