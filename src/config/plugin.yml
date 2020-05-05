@@ -30,4 +30,7 @@ nmap:
   enable: true
   index: 5
 
-
+https:
+  enable: true
+  include_chain: false
+  index: 6
