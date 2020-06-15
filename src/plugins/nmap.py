@@ -109,7 +109,7 @@ class FilterPlugin(Plugin):
                 if self.rules[i]['o']:
                     os_prefix = self.rules[i]['o'].split('$')[0].rstrip().lower()
                     if len(os_prefix) > 0: self.os_white_list.append(os_prefix)
-                self.rules[i]['r'] = re.compile(self.rules[i]['m'], self.rules[i]['mf'])
+                self.rules[i]['r'] = re.compile(bytes(self.rules[i]['m'], encoding="utf-8"), self.rules[i]['mf'])
             return
         
         data = file_data.split('\n')
@@ -178,7 +178,12 @@ class FilterPlugin(Plugin):
 
             new_rule = copy.deepcopy(rule)
             # 预加载正则表达式
-            new_rule['r'] = re.compile(new_rule['m'], new_rule['mf'])
+            try:
+                new_rule['r'] = re.compile(bytes(new_rule['m'], encoding="utf-8"), new_rule['mf'])
+            except Exception as e:
+                self.log('Match rule parse error:', LogLevel.ERROR)
+                self.log(new_rule['m'], LogLevel.ERROR)
+
             self.rules.append(new_rule)
         
         self._ruleCount = len(self.rules)
@@ -193,7 +198,7 @@ class FilterPlugin(Plugin):
         result = []
         for rule in self.rules:
             try:
-                m = rule['r'].match(data)
+                m = rule['r'].search(data)
                 if m:
                     app = {
                         'name': rule['p'],
@@ -249,7 +254,7 @@ class FilterPlugin(Plugin):
             self.log('data field not found.')
             return
         
-        info['apps'] = self.analyze(str(bytes.fromhex(msg['data']), 'utf-8', 'ignore'))
+        info['apps'] = self.analyze(bytes.fromhex(msg['data']))
 
         return info
 
@@ -273,7 +278,13 @@ if __name__ == '__main__':
         #"data": "6765745f696e666f3a20706c7567696e730a5250525420300a617366647361666173667361666173",
 
         #"data": '16030300d0010000cc03035df0c691b795581015d570c868b701ed1784528e488e9aeec4b37dad521e2de4202332000016299b175b8f0ad21daeb83a03eb5d47b57bb60ecfbd10bcd67a101d0026c02cc02bc030c02fc024c023c028c027c00ac009c014c013009d009c003d003c0035002f000a0100005d00000019001700001461637469766974792e77696e646f77732e636f6d000500050100000000000a00080006001d00170018000b00020100000d001400120401050102010403050302030202060106030023000000170000ff01000100',
-        "data": "004a56978183000100000000000013616c6572746d616e616765722d6d61696e2d3115616c6572746d616e616765722d6f706572617465640a6d6f6e69746f72696e67037376630000ff0001",
+        #"data": "004a56978183000100000000000013616c6572746d616e616765722d6d61696e2d3115616c6572746d616e616765722d6f706572617465640a6d6f6e69746f72696e67037376630000ff0001",
+
+        # Example: SMTP
+        #"data": '32323020736d74702e71712e636f6d2045736d7470205151204d61696c205365727665720d0a',
+        
+        # Example: RDP
+        "data": "030000130ed000001234000209080002000000",
 
         "inner": False,
         "tag": "sensor-ens160"
