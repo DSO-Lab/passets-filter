@@ -66,7 +66,7 @@ class FilterPlugin(Plugin):
             self.log(traceback.format_exc(), LogLevel.ERROR)
 
         return info
-ERROR
+
 if __name__ == '__main__':
     plugins = Plugin.loadPlugins(os.path.join(os.path.dirname(__file__), ".."), True)
     msg = {

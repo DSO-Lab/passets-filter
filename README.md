@@ -4,22 +4,33 @@
 
 本模块主要用于对收集的被动资产原始数据进行二次加工，Elasticsearch 中经过清洗的合法数据（至少包含ip和port字段）会添加 state 字段。state=0表示正在清洗，state=1表示已完成清洗。所有的清洗操作都采用插件的方式进行，目前已支持以下插件。
 
-| 插件名     | 功能简介                           | 配置项
-|------------|------------------------------------|----------------------------------|
-| wappalyzer | 识别HTTP类数据中的资产指纹信息     | enable, index
-| nmap       | 识别TCP类数据中的资产指纹信息      | enable, index
-
 ### Wappalyzer 插件
 
 基于数据中的 URL、HTTP 响应头、HTTP响应正文来识别站点指纹信息。
 
 指纹库及识别引擎基于 [Wappalyzer](https://github.com/AliasIO/Wappalyzer/) 修改。
 
+配置参数：
+
+| 插件参数   | 用途说明
+|------------|------------------------------------|
+| enable     | 插件开关，true-启用，false-不启用
+| index      | 在所有插件中的处理顺序，值越小越优先处理
+
 ### NMAP 插件
 
 基于数据中的 TCP 响应报文来识别目标服务的指纹信息。
 
 指纹库基于 [NMAP](https://github.com/nmap/nmap/) 项目中的 `nmap-service-probes` 指纹库。
+
+配置参数：
+
+| 插件参数   | 用途说明
+|------------|------------------------------------|
+| enable     | 插件开关，true-启用，false-不启用
+| index      | 在所有插件中的处理顺序，值越小越优先处理
+| ignore_rules | 忽略的 TCP 指纹规则列表，用 `nmap-service-probes` 中的 `m` 参数值表示，必须完全匹配。
+| ssl_portmap  | 指定 ssl 协议数据的端口对应关系列表，例如：`443:https` 表示检测到 ssl 服务时，如果端口为 443 则认定其为 https 服务，过滤后的用 https 覆盖 ssl。
 
 ## 运行环境
 
@@ -39,7 +50,6 @@ src                      # 核心代码文件
   rules                  # 指纹规则库存放路径
     apps.json            # Wappalyzer Web 应用指纹库
     nmap-service-probes  # NMAP 端口服务指纹库
-  wappalyzer             # Wappalyzer 主程序目录（基于 5.8.4 版本修改，已废弃）
     ... ...
   main.py                # 主程序
   requirements.txt       # 程序依赖库清单
@@ -83,7 +93,7 @@ python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5 -t 10 -m 1 -d 1
 python3 main.py -H 192.168.1.2:9200 -i logstash-passets -r 5 -t 10 -m 0 -d 1
 ```
 
-在设备性能允许的情况下尽量选用单节点多线程模式，综合对比来阿康单节点比多节点性能上更优（节点数*线程数）。多节点部署时只能、并且必须有一个主节点。
+在设备性能允许的情况下尽量选用单节点多线程模式，综合对比来看单节点比多节点性能上更优（节点数*线程数）。多节点部署时只能、并且必须有一个主节点。
 
 ## 清洗程序配置说明
 
@@ -98,6 +108,10 @@ wappalyzer:
 nmap:
   enable: true
   index: 2
+  ignore_rules:     # 不处理的规则列表（列表中的规则将不会处理）
+    - ^OK$
+  ssl_portmap:      # ssl 协议端口映射表
+    - 443:https
 ```
 
 

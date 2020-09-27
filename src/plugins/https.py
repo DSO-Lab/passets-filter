@@ -22,6 +22,26 @@ class FilterPlugin(Plugin):
     HTTPS 流量处理插件
     """
 
+    def __init__(self, rootdir, debug=False, logger=None):
+        """
+        构造函数
+        :param rootdir: 工作目录
+        :param debug: 调式信息输出开关
+        :param logger: 日志处理对象
+        """
+        super().__init__(rootdir, debug, logger)
+
+    def set_config(self, config):
+        """
+        配置初始化函数
+        :param config: 插件配置
+        """
+        super().set_config(config)
+
+        self.include_chain = False
+        if self._config and 'include_chain' in self._config and self._config['include_chain']:
+            self.include_chain = True
+
     def hex_to_len(self, data):
         """
         HEX(16进制) 转数值(10进制)
@@ -214,10 +234,6 @@ class FilterPlugin(Plugin):
     def fetch_certs(self, data):
         certs = []
 
-        include_chain = False
-        if self._config and 'include_chain' in self._config and self._config['include_chain']:
-            include_chain = True
-        
         pos = 0
         while True:
             # 证书头部
@@ -241,7 +257,7 @@ class FilterPlugin(Plugin):
                 certs.append(cert)
             
             # 配置为不含证书链时则只处理第一个有效的证书
-            if not include_chain and len(cert) > 0:
+            if not self.include_chain and len(cert) > 0:
                 break
 
             pos = pos + 8 + 8 + cert_len * 2

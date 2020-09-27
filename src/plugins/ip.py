@@ -24,6 +24,33 @@ class FilterPlugin(Plugin):
     - ip_num: IP对应的数值
     - inner: 内网标识，true为内网
     """
+    inner_ip_ranges = [
+        [167772160, 184549375], # '10.0.0.0-10.255.255.255',
+        [2886729728, 2887778303], # '172.16.0.0-172.31.255.255',
+        [3232235520, 3232301055], # '192.168.0.0-192.168.255.255',
+        [2851995648, 2852061183], # '169.254.0.0-169.254.255.255',
+        [2130706432, 2130706687] # '127.0.0.0-127.0.0.255'
+    ]
+    
+    def set_config(self, config):
+        """
+        插件配置处理
+        :param config: 原始配置信息
+        """
+        super().set_config(config)
+
+        # 处理内网 IP 范围
+        if self._config and 'inner_ips' in self._config and isinstance(self._config['inner_ips'], list):
+            ip_ranges = self._config['inner_ips']
+        
+            self.inner_ip_ranges = []
+            for _ in ip_ranges:
+                _ = _.split('-')
+                
+                try:
+                    self.inner_ip_ranges.append([ self.ip2num(_[0]),  self.ip2num(_[-1])])
+                except:
+                    continue
     
     def ip2num(self, ip):
         """
@@ -63,26 +90,8 @@ class FilterPlugin(Plugin):
         info['ip_num'] = ip_num
 
         # 判断内网IP
-        inner_ip_ranges = [
-            '10.0.0.0-10.255.255.255',
-            '172.16.0.0-172.31.255.255',
-            '192.168.0.0-192.168.255.255',
-            '169.254.0.0-169.254.255.255',
-            '127.0.0.0-127.0.0.255'
-        ]
-
-        if self._config and 'inner_ips' in self._config and isinstance(self._config['inner_ips'], list):
-            inner_ip_ranges = self._config['inner_ips']
-        
-        inner = False
-        for _ in inner_ip_ranges:
-            _ = _.split('-')
-            if len(_) != 2: continue
-
-            ip_start = self.ip2num(_[0])
-            ip_end = self.ip2num(_[1])
-            
-            if ip_num >= ip_start and ip_num <= ip_end:
+        for _ in self.inner_ip_ranges:
+            if ip_num >= _[0] and ip_num <= _[1]:
                 inner = True
                 break
         

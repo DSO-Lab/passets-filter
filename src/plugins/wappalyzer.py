@@ -660,7 +660,7 @@ class FilterPlugin(Plugin):
         :param rootdir: 应用根目录
         :param debug: 调式开关
         """
-        super().__init__(rootdir, debug)
+        super().__init__(rootdir, debug, logger)
 
         # 初始化指纹相关路径
         rule_file = os.path.join(rootdir, 'rules', 'apps.json')
@@ -671,18 +671,14 @@ class FilterPlugin(Plugin):
 
         self._wappalyzer = Wappalyzer(os.path.join(rootdir, 'rules', 'apps.json'), wapp_path, logger)
     
-    def analyze(self, url, headers, body, mode):
+    def analyze(self, url, headers, body):
         """
         分析获取指纹
         :param url: 请求URL
         :param headers: 响应头
         :param body: 响应正文
-        :param mode: 识别方法：1-使用内置Python引擎，2-使用Node版本Wappalyzer引擎
         """
-        if mode == 2:
-            return self._wappalyzer.analyzeByNode(url, headers, body)
-        else:
-            return self._wappalyzer.analyze(url, headers, body)
+        return self._wappalyzer.analyze(url, headers, body)
 
     def generate_header(self, msg):
         """
@@ -703,7 +699,7 @@ class FilterPlugin(Plugin):
             )
         return header
 
-    def execute(self, msg, mode=1):
+    def execute(self, msg):
         """
         插件入口函数，根据插件的功能对 msg 进行处理
         :param msg: 需要处理的消息
@@ -728,7 +724,7 @@ class FilterPlugin(Plugin):
             msg['body'] = ''
 
         # 指纹识别
-        apps = self.analyze(msg['url'], msg['header'], msg['body'], mode)
+        apps = self.analyze(msg['url'], msg['header'], msg['body'])
         info['apps'] = apps
 
         # 标题提取
@@ -769,7 +765,7 @@ if __name__ == '__main__':
         if pluginName == 'wappalyzer':
             print('[!] Plugin {} processing ...'.format(pluginName))
             ctime = time.time()
-            ret = plugin.execute(msg, 1)
+            ret = plugin.execute(msg)
             etime = time.time()
             print('Eclipse time: {}'.format(etime-ctime))
             print(ret)

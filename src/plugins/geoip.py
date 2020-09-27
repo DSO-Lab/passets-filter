@@ -32,7 +32,7 @@ class FilterPlugin(Plugin):
         :param debug: 调式信息输出开关
         :param logger: 日志处理对象
         """
-        super().__init__(rootdir, debug)
+        super().__init__(rootdir, debug, logger)
 
         db_file = os.path.join(rootdir, 'rules', 'GeoLite2-City.mmdb')
         if os.path.exists(db_file):

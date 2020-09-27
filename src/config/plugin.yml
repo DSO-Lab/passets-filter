@@ -5,7 +5,7 @@
 # - index: 插件的处理顺序，0以上的整数，数值越小
 
 ip:
-  enable: false
+  enable: true
   index: 1
   inner_ips:
     - 10.0.0.0-10.255.255.255
@@ -29,6 +29,15 @@ wappalyzer:
 nmap:
   enable: true
   index: 5
+  ignore_rules:
+    - ^OK$
+  ssl_portmap:
+    - 443:https
+    - 465:smtps
+    - 993:imaps
+    - 995:pop3s
+    - 22:ssh
+    - 21:ftps
 
 https:
   enable: true
