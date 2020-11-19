@@ -324,7 +324,7 @@ def filter_thread(threadId, options):
                     '_index': data[i]['_index'],
                     '_type': data[i]['_type'],
                     '_id': data[i]['_id'],
-                    'doc': { 'state': 1 }
+                    'doc': { 'state': MsgState.PROGRESSING }
                 })
             
             if len(actions) == 0:

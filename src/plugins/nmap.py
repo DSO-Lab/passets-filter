@@ -41,8 +41,27 @@ class FilterPlugin(Plugin):
         super().__init__(rootdir, debug, logger)
 
         # 初始化指纹相关路径
-        self.loadRules(os.path.join(rootdir, 'rules', 'nmap-service-probes'))
+        rule_file = os.path.join(rootdir, 'rules', 'nmap-service-probes')
+        if not os.path.exists(rule_file):
+            raise Exception('Nmap rule file not found.')
+
+        self.loadRules(rule_file)
         self.name_regex = re.compile(r'[^\x20-\x7e]')
+
+        asset_type_file = os.path.join(rootdir, 'rules', 'nmap_asset_types.json')
+        if not os.path.exists(asset_type_file) or not self.loadAssetTypes(asset_type_file):
+            self.log('Load asset type file failed.', LogLevel.ERROR)
+            self.asset_types = {}
+
+        device_type_file = os.path.join(rootdir, 'rules', 'nmap_device_types.json')
+        if not os.path.exists(device_type_file) or not self.loadDeviceTypes(device_type_file):
+            self.log('Load device type file failed.', LogLevel.ERROR)
+            self.device_types = {}
+
+        vendor_file = os.path.join(rootdir, 'rules', 'vendors.json')
+        if not os.path.exists(vendor_file) or not self.loadVendors(vendor_file):
+            self.log('Load vendor file failed.', LogLevel.ERROR)
+            self.vendors = []
 
     def set_config(self, config):
         """
@@ -108,6 +127,71 @@ class FilterPlugin(Plugin):
         
         return None
     
+    def loadAssetTypes(self, rule_file):
+        """
+        根据文件名读取资产类型映射关系
+        :param rule_file: 资产类型映射关系表
+        :return True-成功，False-失败
+        """
+        self.asset_types = {}
+        fp = None
+        try:
+            fp = open(rule_file, encoding='utf-8')
+            data = json.loads(fp.read())
+            for key in data:
+                if not isinstance(data[key], list):
+                    continue
+                
+                for _ in data[key]:
+                    self.asset_types[_] = key
+            return True
+        except Exception as e:
+            self.log(str(e), LogLevel.ERROR)
+            return False
+        finally:
+            if fp: fp.close()
+
+    def loadDeviceTypes(self, rule_file):
+        """
+        根据文件名读取设备类型映射关系
+        :param rule_file: 资产类型映射关系表
+        :return True-成功，False-失败
+        """
+        self.device_types = {}
+        fp = None
+        try:
+            fp = open(rule_file, encoding='utf-8')
+            data = json.loads(fp.read())
+            for key in data:
+                if not isinstance(data[key], list):
+                    continue
+                
+                for _ in data[key]:
+                    self.device_types[_] = key
+            return True
+        except Exception as e:
+            self.log(str(e), LogLevel.ERROR)
+            return False
+        finally:
+            if fp: fp.close()
+
+    def loadVendors(self, rule_file):
+        """
+        根据文件名读取设备厂商列表
+        :param rule_file: 厂商列表文件
+        :return True-成功，False-失败
+        """
+        fp = None
+        try:
+            fp = open(rule_file, encoding='utf-8')
+            self.vendors = json.loads(fp.read())
+            return True
+        except Exception as e:
+            self.log(str(e), LogLevel.ERROR)
+            return False
+        finally:
+            if fp: fp.close()
+
     def loadRules(self, rule_file):
         """
         加载 NMAP 规则库
@@ -262,23 +346,68 @@ class FilterPlugin(Plugin):
 
         return list(results.keys())
 
-    def analyze(self, data):
+    def parseAssetType(self, name, info, device):
+        """
+        从指纹名称、信息、设备类型中识别资产类型
+        """
+        parts = "{} {} {}".format(name, info, device).lower().split(' ')
+        for _ in  parts:
+            if not _: continue
+            for key in self.asset_types:
+                if key == _:
+                    return self.asset_types[key]
+
+        return ''
+
+    def parseDeviceType(self, name, info, device):
+        """
+        从指纹名称、信息、设备信息中提取设备类型
+        """
+        # 优先根据既有设备类型来识别类型
+        if device:
+            device = device.lower()
+            for key in self.device_types:
+                if key in device:
+                    return self.device_types[key]
+        
+        parts = "{} {}".format(name, info).lower().split(' ')
+        for _ in  parts:
+            if not _: continue
+            for key in self.device_types:
+                if key == _:
+                    return self.device_types[key]
+
+        return ''
+
+    def parseVendor(self, name, info):
+        """
+        从指纹名称、信息中识别厂商
+        """
+        data = "{} {}".format(name, info)
+        for _ in self.vendors:
+            if _ in data:
+                return _
+        
+        return ''
+
+    def analyze(self, data, port):
         """
         分析获取指纹
         :param data: TCP响应数据包
         :return: 指纹列表，例如：[{'name':'XXX','version':'XXX',...}]
         """
         result = []
+        info = { 'asset_type': '', 'vendor': '', 'device': '', 'service': 'http', 'info': '' }
         for rule in self.rules:
             try:
                 m = rule['r'].search(data)
                 if m:
                     app = {
-                        'name': rule['p'],
-                        'version': rule['v'],
-                        'info': rule['i'],
-                        'os': rule['o'],
-                        'device': rule['d'],
+                        'name': rule['s'] if not rule['p'] else rule['p'],
+                        'version': '' if not rule['v'] else rule['v'],
+                        'info': '' if not rule['i'] else rule['i'],
+                        'os': '' if not rule['o'] else rule['o'],
+                        'device': '' if not rule['d'] else rule['d'],
                         'service': rule['s'],
                         'ports': rule['ports']
                     }
@@ -297,7 +426,6 @@ class FilterPlugin(Plugin):
                         if len(app['os']) > 30 or self.name_regex.search(app['os']): continue
                         tmpOS = app['os'].lower()
                         for _ in self.os_white_list:
-                            print('{} - {}'.format(tmpOS, _))
                             if tmpOS.find(_) == 0 or _.find(tmpOS) == 0:
                                 available = True
                                 break
@@ -305,6 +433,20 @@ class FilterPlugin(Plugin):
                         available = True
                     
                     if available:
+                        app['device'] = self.parseDeviceType(app['name'], app['info'], app['device'])
+                        info = {
+                            'asset_type': self.parseAssetType(app['name'], app['info'], app['device']),
+                            'vendor': self.parseVendor(app['name'], app['info']),
+                            'device': app['device'],
+                            'service': app['service'],
+                            'info': app['info']
+                        }
+
+                        # SSL 协议映射处理
+                        if app['service'] == 'ssl' and port in self.ssl_portmap:
+                            info['service'] = self.ssl_portmap[port]
+                        
+                        del(app['device'], app['service'], app['info'])
                         result.append(app)
                         break
             except Exception as e:
@@ -312,7 +454,7 @@ class FilterPlugin(Plugin):
                 self.log(traceback.format_exc(), LogLevel.ERROR)
                 self.log('[!] Hited Rule: ' + str(rule), LogLevel.ERROR)
         
-        return result
+        return (result, info)
 
     def execute(self, msg):
         """
@@ -330,7 +472,7 @@ class FilterPlugin(Plugin):
             return
         
         # 识别指纹
-        apps = self.analyze(bytes.fromhex(msg['data']))
+        (apps, info) = self.analyze(bytes.fromhex(msg['data']), msg['port'])
         
         # 识别端口匹配度，匹配的可信度为空，不匹配的可信度为50
         for i in range(len(apps)):
@@ -343,12 +485,9 @@ class FilterPlugin(Plugin):
                 confidence = 100
             
             apps[i]['confidence'] = confidence
-            
-            # SSL 协议映射处理
-            if apps[i]['service'] == 'ssl' and msg['port'] in self.ssl_portmap:
-                apps[i]['service'] = self.ssl_portmap[msg['port']]
 
         info['apps'] = apps
+        info.update(info)
 
         return info
 
@@ -361,6 +500,8 @@ if __name__ == '__main__':
         "port": 443,
         "pro": "TCP",
         "host": "111.206.63.16:80",
+        # Telnet
+        #'data': '	fffd01fffd1ffffd21fffb01fffb03',
         #'data': '00',
         # Example: 554 SMTP synchronization error\r\n
         #"data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",
@@ -381,7 +522,8 @@ if __name__ == '__main__':
         #"data": "030000130ed000001234000209080002000000",
 
         # Example:HTTPS
-        "data": "1603030ce50200005b03035f6d463e6b8d09d43230d15d3e64ab61fb9e54317099b2c53c9dafd30e509297206abe5bc2265b6d09710c81877859d85a1218e5a27e5805fa0d9d47b2dbfe9f69009c000013000000000010000b000908687474702f312e310b000c7e000c7b0008313082082d30820715a0030201020210644a68f011861931192823728fbe1545300d06092a864886f70d01010b05003062311c301a060355040313134170706c65204953542043412032202d2047313120301e060355040b131743657274696669636174696f6e20417574686f7269747931133011060355040a130a4170706c6520496e632e310b3009060355040613025553301e170d3139303331353233313732395a170d3231303431333233313732395a30773117301506035504030c0e2a2e6c732e6170706c652e636f6d31253023060355040b0c1c6d616e6167656d656e743a69646d732e67726f75702e35373634383631133011060355040a0c0a4170706c6520496e632e3113301106035504080c0a43616c69666f726e6961310b300906035504061302555330820122300d06092a864886f70d01010105000382010f003082010a0282010100cf9390dba34c1b7fb02fb550891bd89849747501fecbb8c6df45ead2ccf00341e11d43a5b6d78054493bb92095efbd2f19df07e18ae81f8cda4c7b996722ff99eb68a3e7ce9d967ccae05128040498b93493a717ce2e367a647750ec5523194005a6f6d1c98c8e28181021b3d5d1971741158e13d8d658272de9ddf2c211e8e2fbfce6e7a116270301d492bff6dcc26157ff562dd596a1a3b4a385d63cfaa1988dcea8365ff006e9bbf2bb9fbc9de954ca41ec6ac4706a1c8ea3962b97930a7cad1e63da24ce2e871999ed2f7ab354b603dfd09dc1edf11226d79caa6a509b0fce9004ea346f5351cb0967b7a5c079bf4299ea3b954709359303a90aa028f51f0203010001a38204c8308204c4300c0603551d130101ff04023000301f0603551d23041830168014d87a94447c907090169edd179c01440386d62a29307e06082b0601050507010104723070303406082b060105050730028628687474703a2f2f63657274732e6170706c652e636f6d2f6170706c6569737463613267312e646572303806082b06010505073001862c687474703a2f2f6f6373702e6170706c652e636f6d2f6f63737030332d6170706c656973746361326731323030190603551d1104123010820e2a2e6c732e6170706c652e636f6d3081ff0603551d200481f73081f43081f1060a2a864886f76364050b043081e23081a406082b060105050702023081970c819452656c69616e6365206f6e207468697320636572746966696361746520627920616e7920706172747920617373756d657320616363657074616e6365206f6620616e79206170706c696361626c65207465726d7320616e6420636f6e646974696f6e73206f662075736520616e642f6f722063657274696669636174696f6e2070726163746963652073746174656d656e74732e303906082b06010505070201162d687474703a2f2f7777772e6170706c652e636f6d2f6365727469666963617465617574686f726974792f727061301d0603551d250416301406082b0601050507030206082b0601050507030130370603551d1f0430302e302ca02aa0288626687474703a2f2f63726c2e6170706c652e636f6d2f6170706c6569737463613267312e63726c301d0603551d0e041604143fc6bb3b828a044930a9813a6824cc0d7388e597300e0603551d0f0101ff0404030205a03082026d060a2b06010401d6790204020482025d048202590257007600bbd9dfbc1f8a71b593942397aa927b473857950aab52e81a909664368e1ed1850000016983ae8f950000040300473045022100baa8d2a6d8f3b68959c063775735c8cffd1450afe792c79efb6225258f41de10022076f6fbf8f9bea11ace1c596f5c39f35804e036329e4fb831298f8901927f668a007500a4b90990b4",
+        #"data": "1603030ce50200005b03035f6d463e6b8d09d43230d15d3e64ab61fb9e54317099b2c53c9dafd30e509297206abe5bc2265b6d09710c81877859d85a1218e5a27e5805fa0d9d47b2dbfe9f69009c000013000000000010000b000908687474702f312e310b000c7e000c7b0008313082082d30820715a0030201020210644a68f011861931192823728fbe1545300d06092a864886f70d01010b05003062311c301a060355040313134170706c65204953542043412032202d2047313120301e060355040b131743657274696669636174696f6e20417574686f7269747931133011060355040a130a4170706c6520496e632e310b3009060355040613025553301e170d3139303331353233313732395a170d3231303431333233313732395a30773117301506035504030c0e2a2e6c732e6170706c652e636f6d31253023060355040b0c1c6d616e6167656d656e743a69646d732e67726f75702e35373634383631133011060355040a0c0a4170706c6520496e632e3113301106035504080c0a43616c69666f726e6961310b300906035504061302555330820122300d06092a864886f70d01010105000382010f003082010a0282010100cf9390dba34c1b7fb02fb550891bd89849747501fecbb8c6df45ead2ccf00341e11d43a5b6d78054493bb92095efbd2f19df07e18ae81f8cda4c7b996722ff99eb68a3e7ce9d967ccae05128040498b93493a717ce2e367a647750ec5523194005a6f6d1c98c8e28181021b3d5d1971741158e13d8d658272de9ddf2c211e8e2fbfce6e7a116270301d492bff6dcc26157ff562dd596a1a3b4a385d63cfaa1988dcea8365ff006e9bbf2bb9fbc9de954ca41ec6ac4706a1c8ea3962b97930a7cad1e63da24ce2e871999ed2f7ab354b603dfd09dc1edf11226d79caa6a509b0fce9004ea346f5351cb0967b7a5c079bf4299ea3b954709359303a90aa028f51f0203010001a38204c8308204c4300c0603551d130101ff04023000301f0603551d23041830168014d87a94447c907090169edd179c01440386d62a29307e06082b0601050507010104723070303406082b060105050730028628687474703a2f2f63657274732e6170706c652e636f6d2f6170706c6569737463613267312e646572303806082b06010505073001862c687474703a2f2f6f6373702e6170706c652e636f6d2f6f63737030332d6170706c656973746361326731323030190603551d1104123010820e2a2e6c732e6170706c652e636f6d3081ff0603551d200481f73081f43081f1060a2a864886f76364050b043081e23081a406082b060105050702023081970c819452656c69616e6365206f6e207468697320636572746966696361746520627920616e7920706172747920617373756d657320616363657074616e6365206f6620616e79206170706c696361626c65207465726d7320616e6420636f6e646974696f6e73206f662075736520616e642f6f722063657274696669636174696f6e2070726163746963652073746174656d656e74732e303906082b06010505070201162d687474703a2f2f7777772e6170706c652e636f6d2f6365727469666963617465617574686f726974792f727061301d0603551d250416301406082b0601050507030206082b0601050507030130370603551d1f0430302e302ca02aa0288626687474703a2f2f63726c2e6170706c652e636f6d2f6170706c6569737463613267312e63726c301d0603551d0e041604143fc6bb3b828a044930a9813a6824cc0d7388e597300e0603551d0f0101ff0404030205a03082026d060a2b06010401d6790204020482025d048202590257007600bbd9dfbc1f8a71b593942397aa927b473857950aab52e81a909664368e1ed1850000016983ae8f950000040300473045022100baa8d2a6d8f3b68959c063775735c8cffd1450afe792c79efb6225258f41de10022076f6fbf8f9bea11ace1c596f5c39f35804e036329e4fb831298f8901927f668a007500a4b90990b4",
+        'data': '	1603030046020000420303380629e477d8f0a0b8682d25118e807ccaacc11122040dcbb88433b1af19363c00c02f00001aff01000100000b000403000102002300000010000500030268321603030b2e0b000b2a000b270006cf308206cb308205b3a003020102020c1806f2a7bc6475852c9c7ff7300d06092a864886f70d01010b05003050310b300906035504061302424531193017060355040a1310476c6f62616c5369676e206e762d7361312630240603550403131d476c6f62616c5369676e20525341204f562053534c2043412032303138301e170d3139313031313037343133395a170d3231313132383233353935395a30818a310b300906035504061302434e310f300d06035504080c06e58c97e4baac310f300d06035504070c06e58c97e4baac31123010060355040b0c09e8bf90e7bbb4e983a8312d302b060355040a0c24e58c97e4baace59fbae8b083e7bd91e7bb9ce882a1e4bbbde69c89e99990e585ace58fb83116301406035504030c0d2a2e74696e6779756e2e636f6d30820122300d06092a864886f70d01010105000382010f003082010a0282010100d1789b0d322616ca1bfc6467b2ecbec70dcf8b14a79d217561cb0a28cd544304383dd4a99c62edc0ff9ef5b732b62c823f0032a3c9b82a6c16a9e12a92af3748c4842605af6fc6cdacff6ac92a67a7ee1af4f678fba50f25ea24c82fc96b89f0d7353b062210a883b73cf383293f2d051fa959559738b8f1c2bedf43af872247855ba2d29b8b40898303299aca9b11fd1a954864b948449f8f30fd2eb32add07e9fbfc98ed16eca9f149966cab6dde7eca5758eb1fd4ab20ccf700283c48cff3235ffbbbaa234bbd8eab6f9ececa10f3cbbf83af0e811301010d70fe3773d7a94f3fb9f0d0a406c6bd352913284117e4f79cd5a8ff7001d9b0379a2c5234a7630203010001a382036830820364300e0603551d0f0101ff0404030205a030818e06082b06010505070101048181307f304406082b060105050730028638687474703a2f2f7365637572652e676c6f62616c7369676e2e636f6d2f6361636572742f67737273616f7673736c6361323031382e637274303706082b06010505073001862b687474703a2f2f6f6373702e676c6f62616c7369676e2e636f6d2f67737273616f7673736c63613230313830560603551d20044f304d304106092b06010401a03201143034303206082b06010505070201162668747470733a2f2f7777772e676c6f62616c7369676e2e636f6d2f7265706f7369746f72792f3008060667810c01020230090603551d1304023000303f0603551d1f043830363034a032a030862e687474703a2f2f63726c2e676c6f62616c7369676e2e636f6d2f67737273616f7673736c6361323031382e63726c30390603551d1104323030820d2a2e74696e6779756e2e636f6d82122a2e6e6574776f726b62656e63682e636f6d820b74696e6779756e2e636f6d301d0603551d250416301406082b0601050507030106082b06010505070302301f0603551d23041830168014f8ef7ff2cd7867a8de6f8f248d88f1870302b3eb301d0603551d0e04160414f2686266f52e4ed5a8649335ac838c68634264e730820181060a2b06010401d679020402048201710482016d016b007700a4b90990b418581487bb13a2cc67700a3c359804f91bdfb8e377cd0ec80ddc100000016db9c420910000040300483046022100d73c696260ec47b79ae61affe7a0f96817702dcfe603ea1a5810f08ff909a6f4022100c96b98b57f5c92a97a867b62ab4b26d78bd7ff40ae1403422927266f707cab4a0077006f5376ac31f03119d89900a45115ff77151c11d902c10029068db2089a37d9130000016db9c420e30000040300483046022100e169be6917dc0b2ef2cb4b386efea03e0c0346277308aa18bfd0be3cadd2df91022100a3e000d1e9f375441f154e03bda80740f2cafb7239d7929f39aa5579',
 
         "inner": False,
         "tag": "sensor-ens160"

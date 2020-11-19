@@ -1,0 +1,155 @@
+{
+	"Network Device":[
+		"router",
+		"switch",
+		"telecom",
+		"hub",
+		"bridge",
+		"gateway",
+		"modem",
+		"wireless",
+		"wifi",
+		"wlan",
+		"wi-fi",
+		"network",
+		"vpn",
+		"openvpn",
+		"dsl",
+		"adsl",
+		"gsm",
+		"telnet"
+	],
+	"Security Device":[
+		"security-misc",
+		"firewall",
+		"access",
+		"secure",
+		"anti-virus",
+		"anti-spam"
+	],
+	"Storage Device":[
+		"storage-misc",
+		"raid",
+		"storage"
+	],
+	"IoT Device":[
+		"webcam",
+		"pda",
+		"camera",
+		"microcontroller"
+	],
+	"Printer":[
+		"printer"
+	],
+	"Control System":[
+		"power-device",
+		"power-misc"
+	],
+	"OS":[
+	],
+	"Mail Server":[
+		"smtp",
+		"smtpd",
+		"imap",
+		"imapd",
+		"pop3",
+		"pop3d",
+		"lmtp",
+		"lmtpd",
+		"webmail"
+	],
+	"Database":[
+		"rdbms",
+		"mysql",
+		"oracle",
+		"db2",
+		"mongodb",
+		"influxdb",
+		"couchdb",
+		"rethinkdb",
+		"arangodb",
+		"monetdb",
+		"rethinkdb",
+		"database"
+	],
+	"Web Server":[
+		"http",
+		"https",
+		"httpd",
+		"web",
+		"iis",
+		"nginx",
+		"tengine"
+	],
+	"FTP Server":[
+		"ftp",
+		"serv-u",
+		"filezilla"
+	],
+	"DNS Server":[
+		"dns",
+		"bind"
+	],
+	"Media Server":[
+		"pbx",
+		"voip",
+		"radio",
+		"video",
+		"dvr",
+		"media",
+		"sip"
+	],
+	"Font Server":[
+		"font"
+	],
+	"Time Server":[
+		"time"
+	],
+	"SSH Server":[
+		"ssh",
+		"sshd"
+	],
+	"Application Middleware":[
+		"weblogic",
+		"websphere",
+		"tomcat",
+		"jboss",
+		"jetty"
+	],
+	"Office Software":[
+	],
+	"Digital Currency":[
+		"currency"
+	],
+	"Container":[
+		"container",
+		"vmware",
+		"esxi"
+	],
+	"Cloud Platform":[
+		"cloud"
+	],
+	"Load Balancer":[
+		"load balancer",
+		"proxy",
+		"wap"
+	],
+	"Securities System":[
+		"securities"
+	],
+	"Knowledge Base System":[
+		"bbs",
+		"wiki",
+		"message",
+		"guestbook"
+	],
+	"Payment System":[
+		"payment"
+	],
+	"Terminal":[
+		"terminal",
+		"phone",
+		"game",
+		"pc"
+	]
+}

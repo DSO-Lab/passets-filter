@@ -1,0 +1,62 @@
+{
+	"Network Device":[
+		31,37,1005
+	],
+	"Security Device":[
+		1006
+	],
+	"Storage Device":[
+		48
+	],
+	"IoT":[
+		39,1008
+	],
+	"Printer":[
+		40
+	],
+	"Control System":[
+		45
+	],
+	"OS":[
+		5
+	],
+	"Mail":[
+		30
+	],
+	"Database":[
+		34
+	],
+	"Web Server":[
+		22,64
+	],
+	"Media Server":[
+		38
+	],
+	"Application Middleware":[
+		1009
+	],
+	"Office Software":[
+		50,53,58,1007
+	],
+	"Digital Currency":[
+		56
+	],
+	"Container":[
+		60
+	],
+	"Cloud Platform":[
+		9,61,62,63
+	],
+	"Load Balancer":[
+		65
+	],
+	"Securities System":[
+		1001,1002
+	],
+	"Knowledge Base System":[
+		2,4,8,11,49
+	],
+	"Payment System":[
+		41,43
+	]
+}
