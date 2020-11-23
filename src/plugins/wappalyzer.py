@@ -16,7 +16,6 @@ import traceback
 import logging
 
 from datetime import datetime
-from urllib import parse
 from plugin import Plugin, LogLevel
 
 class Wappalyzer():
@@ -31,37 +30,16 @@ class Wappalyzer():
     _metaRegex1 = re.compile(r'<meta\s+(?:name|http-equiv)=[\'"]([^\'"]+)[\'"]\s+content=[\'"]([^>]*?)[\'"]', re.I)
     _metaRegex2 = re.compile(r'<meta\s+content=[\'"]([^>]*?)[\'"]\s+(?:name|http-equiv)=[\'"]([^\'"]+)[\'"]', re.I)
     
-    def __init__(self, rule_file, asset_type_file, device_type_file, vendor_file, logger=None, debug=LogLevel.ERROR):
+    def __init__(self, rule_file, logger=None, debug=LogLevel.ERROR):
         """
         构造函数
         :param rule_file: wappalyzer 规则库文件路径
-        :param asset_type_file: 资产类型映射关系文件
-        :param device_type_file: 设备类型映射关系文件
-        :param vendor_file: 厂商列表文件
         :param logger: 日志处理对象
         :param debug: 调试开关
         """
         self._logger = logger
-        # self._asset_type_file = asset_type_file
-        # self._device_type_file = device_type_file
-        # self._vendor_file = vendor_file
-        # self._rule_file = rule_file
         self._debug = debug
-
-        if not os.path.exists(rule_file):
-            raise Exception('Wappalyzer rule file not found.')
-
-        if not os.path.exists(asset_type_file) or not self.loadAssetTypes(asset_type_file):
-            self.log('Load asset type file failed.', LogLevel.ERROR)
-            self.asset_types = {}
-
-        if not os.path.exists(device_type_file) or not self.loadDeviceTypes(device_type_file):
-            self.log('Load device type file failed.', LogLevel.ERROR)
-            self.device_types = {}
-
-        if not os.path.exists(vendor_file) or not self.loadVendors(vendor_file):
-            self.log('Load vendor file failed.', LogLevel.ERROR)
-            self.vendors = []
+		
 
         if not self.loadRules(rule_file):
             raise Exception('Wappalyzer rules load failed.')
@@ -123,7 +101,7 @@ class Wappalyzer():
         :param url: URL
         :param raw_headers: 原始HTTP头
         :param body: 原始页面内容
-        :return: 指纹列表 ([{name,version,confidence,product},...], {asset_type,vendor,device,service,info})
+        :return: 指纹列表 [{name,version,confidence,product},...]
         """
         matchList = []
 
@@ -149,6 +127,8 @@ class Wappalyzer():
 
         result = {}
         for _ in matchList:
+            _['layer'] = self._apps[_['name']]['layer']
+            _['website'] = self._apps[_['name']]['website']
             if _['name'] not in result:
                 result[_['name']] = _
                 continue
@@ -166,24 +146,9 @@ class Wappalyzer():
         
         confidenceRegex = re.compile(r'^confidence:([\d\.]+)$')
         # 填充关联指纹和分类
-        info = { 'asset_type': '', 'vendor': '', 'device': '', 'service': 'http', 'info': '' }
-        lastLayer = 1
-        vendors = {}
-        device_types = {}
-        asset_types = {}
         appNames = list(result.keys())
         while len(appNames) > 0:
             appName = appNames.pop()
-            # 识别设备类型
-            asset_type = self.parseAssetType(self._apps[appName]['cats'])
-            if asset_type:
-                asset_types[asset_type] = ''
-            
-            # 识别资产类型
-            device_type = self.parseDeviceType(appName)
-            if device_type:
-                device_types[device_type] = ''
-
             # 合并产品属性到应用属性中
             if 'product' in result[appName]:
                 if result[appName]['product']:
@@ -192,17 +157,9 @@ class Wappalyzer():
                 del(result[appName]['product'])
             
             result[appName]['categories'] = self.analyzeCategory(self._apps[appName]['cats'])
+            # 如果当前层为操作系统层，则将 os 设置为指纹名
+            result[appName]['os'] = appName if self._apps[appName]['layer'] == 4 else ''
 
-            # 识别设备产品型号/版本（用3-5层的指纹名称填充，使用 lastLayer 来控制只取一个指纹的父级）
-            # print("Level: {}, appName: {}, implies: {}".format(self._apps[appName]['layer'], appName, self._apps[appName]['implies']))
-            if self._apps[appName]['layer'] in [3, 4, 5] and self._apps[appName]['layer'] > lastLayer:
-                info['info'] = appName + " " + info['info']
-                lastLayer += 1
-            
-            # 识别厂商
-            if self._apps[appName]['vendor'] and self._apps[appName]['layer'] != 2:
-                vendors[self._apps[appName]['vendor']] = ''
-            
             if not self._apps[appName]['implies']: continue
             
             for parentName in self._apps[appName]['implies']:
@@ -221,22 +178,17 @@ class Wappalyzer():
                 
                 if parentName in self._apps and parentName not in result:
                     result[parentName] = {
+                        'os': parentName,
                         'name': parentName,
                         'confidence': 100 if confidence > 100 else confidence,
-                        'version': None,
-                        'categories': self.analyzeCategory(self._apps[parentName]['cats'])
+                        'version': '',
+                        'categories': self.analyzeCategory(self._apps[parentName]['cats']),
+                        'layer': self._apps[parentName]['layer'],
+                        'website': self._apps[parentName]['website']
                     }
                     appNames.append(parentName)
 
-        if len(vendors) > 0:
-            info['vendor'] = ','.join(list(vendors.keys()))
-        if len(asset_types) > 0:
-            info['asset_type'] = ','.join(list(asset_types.keys()))
-        if len(device_types) > 0:
-            info['device'] = ','.join(list(device_types.keys()))
-        info['info'] = info['info'].strip()
-
-        return (list(result.values()), info)
+        return list(result.values())
 
     def analyzeCategory(self, cat_ids):
         """
@@ -358,7 +310,7 @@ class Wappalyzer():
         :return: 指纹列表
         """
         if not headers: return []
-        
+
         result = []
         for _ in self._rules['headers']:
             if _['keyword'] not in headers: continue
@@ -399,8 +351,8 @@ class Wappalyzer():
         result = {
             "name": rule['name'],
             "confidence": rule['confidence'],
-            "version": None if 'version' not in rule else rule['version'],
-            "product": None if 'product' not in rule else rule['product']
+            "version": '' if 'version' not in rule else rule['version'],
+            "product": '' if 'product' not in rule else rule['product']
         }
 
         if match:
@@ -417,72 +369,7 @@ class Wappalyzer():
                         result[k] = result[k].replace(_, '')
 
         return result
-    
-    def loadAssetTypes(self, rule_file):
-        """
-        根据文件名读取资产类型映射关系
-        :param rule_file: 资产类型映射关系表
-        :return True-成功，False-失败
-        """
-        self.asset_types = {}
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            data = json.loads(fp.read())
-            for key in data:
-                if not isinstance(data[key], list):
-                    continue
-                
-                for _ in data[key]:
-                    self.asset_types[_] = key
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
-    def loadDeviceTypes(self, rule_file):
-        """
-        根据文件名读取设备类型映射关系
-        :param rule_file: 资产类型映射关系表
-        :return True-成功，False-失败
-        """
-        self.device_types = {}
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            data = json.loads(fp.read())
-            for key in data:
-                if not isinstance(data[key], list):
-                    continue
-                
-                for _ in data[key]:
-                    self.device_types[_] = key
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
-    def loadVendors(self, rule_file):
-        """
-        根据文件名读取设备厂商列表
-        :param rule_file: 厂商列表文件
-        :return True-成功，False-失败
-        """
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            self.vendors = json.loads(fp.read())
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
+        
     def loadRules(self, rule_file):
         """
         根据文件名载入 Wappalyzer 规则库
@@ -514,6 +401,8 @@ class Wappalyzer():
                 else:
                     try:
                         rules['apps'][appName]['layer'] = int(rules['apps'][appName]['layer'])
+                        if rules['apps'][appName]['layer'] not in [1, 2, 3, 4, 5]:
+                            rules['apps'][appName]['layer'] = 1
                     except:
                         pass
                 
@@ -528,7 +417,6 @@ class Wappalyzer():
                 cats = [] if 'cats' not in rules['apps'][appName] else rules['apps'][appName]['cats']
                 implies = [] if 'implies' not in rules['apps'][appName] else rules['apps'][appName]['implies']
                 self._apps[appName] = {
-                    'vendor': self.parseVendor(website),
                     'website': website,
                     'cats': cats,
                     'implies': implies,
@@ -583,52 +471,6 @@ class Wappalyzer():
         finally:
             if fp: fp.close()
 
-    def parseAssetType(self, categorie_ids):
-        """
-        根据分类 ID 确定资产类型
-        """
-        for _ in categorie_ids:
-            if _ in self.asset_types:
-                return self.asset_types[_]
-        
-        return ''
-
-    def parseDeviceType(self, appName):
-        """
-        根据指纹名称关键词确定设备类型
-        """
-        appName = appName.lower()
-        for _ in self.device_types:
-            if _ in appName:
-                return self.device_types[_]
-        
-        return ''
-
-    def parseVendor(self, url):
-        """
-        从URL中解析提取厂商名称
-        """
-        url = url.lower()
-        if url.find('http://') != 0 and url.find('https://') != 0:
-            return ''
-        
-        try:
-            parts = parse.urlsplit(url).netloc.split(':')[0].split('.')[:-1]
-            if parts[0] in ['www']:
-                parts = parts[1:]
-            if parts[-1] in ['org', 'com', 'edu', 'gov', 'biz']:
-                parts = parts[:-1]
-            
-            if len(parts[-1]) < 3 and len(parts) > 1:
-                return parts[-2].upper()
-            else:
-                if len(parts[-1]) < 4:
-                    return parts[-1].upper()
-                else:
-                    return parts[-1].capitalize()
-        except:
-            return ''
-
     def parseRule(self, rule):
         """
         解析规则库中的单条规则
@@ -636,14 +478,14 @@ class Wappalyzer():
         @return: {'regex': Regex, 'version': string, 'confidence': int}
         """
         if not rule:
-            return { 'regex': None, 'version': None, 'confidence': 100 }
+            return { 'regex': '', 'version': '', 'confidence': 100 }
         
         try:
             parts = rule.split(r'\;')
             result = {
                 'regex': re.compile(parts[0], re.I),
-                'version': None,
-                'product': None,
+                'version': '',
+                'product': '',
                 'confidence': 100
             }
             for item in parts[1:]:
@@ -783,12 +625,8 @@ class FilterPlugin(Plugin):
         super().__init__(rootdir, debug, logger)
 
         # 初始化指纹相关路径
-        rule_file = os.path.join(rootdir, 'rules', 'apps.json')
-        asset_type_file = os.path.join(rootdir, 'rules', 'wappalyzer_asset_types.json')
-        device_type_file = os.path.join(rootdir, 'rules', 'wappalyzer_device_types.json')
-        vendor_file = os.path.join(rootdir, 'rules', 'vendors.json')
 
-        self._wappalyzer = Wappalyzer(rule_file, asset_type_file, device_type_file, vendor_file, logger=logger)
+        self._wappalyzer = Wappalyzer(os.path.join(rootdir, 'rules', 'apps.json'), logger=logger)
     
     def analyze(self, url, headers, body):
         """
@@ -843,9 +681,8 @@ class FilterPlugin(Plugin):
             msg['body'] = ''
 
         # 指纹识别
-        (apps, info_ext) = self.analyze(msg['url'], msg['header'], msg['body'])
+        apps = self.analyze(msg['url'], msg['header'], msg['body'])
         info['apps'] = apps
-        info.update(info_ext)
 
         # 标题提取
         if 'type' in msg and msg['type'].find('text/html') != -1:
@@ -889,7 +726,7 @@ if __name__ == '__main__':
             ret = plugin.execute(msg)
             etime = time.time()
             print('Eclipse time: {}'.format(etime-ctime))
-            print(ret)
+            print(json.dumps(ret, indent=2))
     #'''
 
     # # Test python engine

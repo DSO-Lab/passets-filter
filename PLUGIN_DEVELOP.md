@@ -70,6 +70,16 @@ class FilterPlugin(Plugin):
         # 注：如果插件没有额外的初始化操作，可以无需实现 __init__() 方法。
         ... ...
     
+    def set_config(self, config):
+        """
+        配置初始化函数
+        :param config: 插件配置
+        """
+        super().set_config(config)
+        
+        # 此处编写本插件的配置初始化代码
+        ... ...
+        
     def execute(self, msg):
         """
         插件入口函数，根据插件的功能对 msg 进行处理

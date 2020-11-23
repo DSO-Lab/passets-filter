@@ -1,7 +1,7 @@
 {
-	"load balancer":["load balancer", "负载均衡", "big-ip"],
+	"load balancer":["load balancer", "负载均衡", "big-ip", "cdn"],
 	"remote management":[],
-	"security-misc":["gateway", "网关", "security", "安全"],
+	"security-misc":["gateway", "网关", "security", "安全", "堡垒机"],
 	"printer":["printer", "打印机"],
 	"storage-misc":["storage", "云存储"],
 	"media device":["media", "流媒体", "视频"],

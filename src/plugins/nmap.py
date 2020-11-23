@@ -48,21 +48,6 @@ class FilterPlugin(Plugin):
         self.loadRules(rule_file)
         self.name_regex = re.compile(r'[^\x20-\x7e]')
 
-        asset_type_file = os.path.join(rootdir, 'rules', 'nmap_asset_types.json')
-        if not os.path.exists(asset_type_file) or not self.loadAssetTypes(asset_type_file):
-            self.log('Load asset type file failed.', LogLevel.ERROR)
-            self.asset_types = {}
-
-        device_type_file = os.path.join(rootdir, 'rules', 'nmap_device_types.json')
-        if not os.path.exists(device_type_file) or not self.loadDeviceTypes(device_type_file):
-            self.log('Load device type file failed.', LogLevel.ERROR)
-            self.device_types = {}
-
-        vendor_file = os.path.join(rootdir, 'rules', 'vendors.json')
-        if not os.path.exists(vendor_file) or not self.loadVendors(vendor_file):
-            self.log('Load vendor file failed.', LogLevel.ERROR)
-            self.vendors = []
-
     def set_config(self, config):
         """
         配置初始化函数
@@ -127,71 +112,6 @@ class FilterPlugin(Plugin):
         
         return None
     
-    def loadAssetTypes(self, rule_file):
-        """
-        根据文件名读取资产类型映射关系
-        :param rule_file: 资产类型映射关系表
-        :return True-成功，False-失败
-        """
-        self.asset_types = {}
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            data = json.loads(fp.read())
-            for key in data:
-                if not isinstance(data[key], list):
-                    continue
-                
-                for _ in data[key]:
-                    self.asset_types[_] = key
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
-    def loadDeviceTypes(self, rule_file):
-        """
-        根据文件名读取设备类型映射关系
-        :param rule_file: 资产类型映射关系表
-        :return True-成功，False-失败
-        """
-        self.device_types = {}
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            data = json.loads(fp.read())
-            for key in data:
-                if not isinstance(data[key], list):
-                    continue
-                
-                for _ in data[key]:
-                    self.device_types[_] = key
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
-    def loadVendors(self, rule_file):
-        """
-        根据文件名读取设备厂商列表
-        :param rule_file: 厂商列表文件
-        :return True-成功，False-失败
-        """
-        fp = None
-        try:
-            fp = open(rule_file, encoding='utf-8')
-            self.vendors = json.loads(fp.read())
-            return True
-        except Exception as e:
-            self.log(str(e), LogLevel.ERROR)
-            return False
-        finally:
-            if fp: fp.close()
-
     def loadRules(self, rule_file):
         """
         加载 NMAP 规则库
@@ -346,50 +266,6 @@ class FilterPlugin(Plugin):
 
         return list(results.keys())
 
-    def parseAssetType(self, name, info, device):
-        """
-        从指纹名称、信息、设备类型中识别资产类型
-        """
-        parts = "{} {} {}".format(name, info, device).lower().split(' ')
-        for _ in  parts:
-            if not _: continue
-            for key in self.asset_types:
-                if key == _:
-                    return self.asset_types[key]
-
-        return ''
-
-    def parseDeviceType(self, name, info, device):
-        """
-        从指纹名称、信息、设备信息中提取设备类型
-        """
-        # 优先根据既有设备类型来识别类型
-        if device:
-            device = device.lower()
-            for key in self.device_types:
-                if key in device:
-                    return self.device_types[key]
-        
-        parts = "{} {}".format(name, info).lower().split(' ')
-        for _ in  parts:
-            if not _: continue
-            for key in self.device_types:
-                if key == _:
-                    return self.device_types[key]
-
-        return ''
-
-    def parseVendor(self, name, info):
-        """
-        从指纹名称、信息中识别厂商
-        """
-        data = "{} {}".format(name, info)
-        for _ in self.vendors:
-            if _ in data:
-                return _
-        
-        return ''
-
     def analyze(self, data, port):
         """
         分析获取指纹
@@ -397,7 +273,6 @@ class FilterPlugin(Plugin):
         :return: 指纹列表，例如：[{'name':'XXX','version':'XXX',...}]
         """
         result = []
-        info = { 'asset_type': '', 'vendor': '', 'device': '', 'service': 'http', 'info': '' }
         for rule in self.rules:
             try:
                 m = rule['r'].search(data)
@@ -409,8 +284,10 @@ class FilterPlugin(Plugin):
                         'os': '' if not rule['o'] else rule['o'],
                         'device': '' if not rule['d'] else rule['d'],
                         'service': rule['s'],
-                        'ports': rule['ports']
+                        # 端口不匹配的可信度下降为50
+                        'confidence': 100 if len(rule['ports']) == 0 or port in rule['ports'] else 50
                     }
+
                     if m.lastindex:
                         for i in range(m.lastindex + 1):
                             skey = '${}'.format(i)
@@ -433,20 +310,9 @@ class FilterPlugin(Plugin):
                         available = True
                     
                     if available:
-                        app['device'] = self.parseDeviceType(app['name'], app['info'], app['device'])
-                        info = {
-                            'asset_type': self.parseAssetType(app['name'], app['info'], app['device']),
-                            'vendor': self.parseVendor(app['name'], app['info']),
-                            'device': app['device'],
-                            'service': app['service'],
-                            'info': app['info']
-                        }
-
                         # SSL 协议映射处理
                         if app['service'] == 'ssl' and port in self.ssl_portmap:
-                            info['service'] = self.ssl_portmap[port]
-                        
-                        del(app['device'], app['service'], app['info'])
+                            app['service'] = self.ssl_portmap[port]
                         result.append(app)
                         break
             except Exception as e:
@@ -454,7 +320,7 @@ class FilterPlugin(Plugin):
                 self.log(traceback.format_exc(), LogLevel.ERROR)
                 self.log('[!] Hited Rule: ' + str(rule), LogLevel.ERROR)
         
-        return (result, info)
+        return result
 
     def execute(self, msg):
         """
@@ -472,7 +338,7 @@ class FilterPlugin(Plugin):
             return
         
         # 识别指纹
-        (apps, info) = self.analyze(bytes.fromhex(msg['data']), msg['port'])
+        apps = self.analyze(bytes.fromhex(msg['data']), msg['port'])
         
         # 识别端口匹配度，匹配的可信度为空，不匹配的可信度为50
         for i in range(len(apps)):
@@ -487,7 +353,6 @@ class FilterPlugin(Plugin):
             apps[i]['confidence'] = confidence
 
         info['apps'] = apps
-        info.update(info)
 
         return info
 
@@ -500,8 +365,6 @@ if __name__ == '__main__':
         "port": 443,
         "pro": "TCP",
         "host": "111.206.63.16:80",
-        # Telnet
-        #'data': '	fffd01fffd1ffffd21fffb01fffb03',
         #'data': '00',
         # Example: 554 SMTP synchronization error\r\n
         #"data": "35353420534d54502073796e6368726f6e697a6174696f6e206572726f720d0a",

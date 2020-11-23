@@ -5,7 +5,7 @@
 # - index: 插件的处理顺序，0以上的整数，数值越小
 
 ip:
-  enable: true
+  enable: false
   index: 1
   inner_ips:
     - 10.0.0.0-10.255.255.255
@@ -31,6 +31,7 @@ nmap:
   index: 5
   ignore_rules:
     - ^OK$
+    - ^\+OK\r\n$
   ssl_portmap:
     - 443:https
     - 465:smtps
@@ -43,3 +44,13 @@ https:
   enable: true
   include_chain: false
   index: 6
+
+asset:
+  enable: true
+  index: 7
+  ignore_vendors:
+    - asp
+    - iis
+    - windows
+    - java
+    

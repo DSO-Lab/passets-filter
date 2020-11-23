@@ -17,6 +17,12 @@
 | enable     | 插件开关，true-启用，false-不启用
 | index      | 在所有插件中的处理顺序，值越小越优先处理
 
+相关配置文件（指纹规则）：
+
+```
+# rules/apps.json
+```
+
 ### NMAP 插件
 
 基于数据中的 TCP 响应报文来识别目标服务的指纹信息。
@@ -32,6 +38,93 @@
 | ignore_rules | 忽略的 TCP 指纹规则列表，用 `nmap-service-probes` 中的 `m` 参数值表示，必须完全匹配。
 | ssl_portmap  | 指定 ssl 协议数据的端口对应关系列表，例如：`443:https` 表示检测到 ssl 服务时，如果端口为 443 则认定其为 https 服务，过滤后的用 https 覆盖 ssl。
 
+相关配置文件（指纹规则）：
+
+```
+# rules/nmap-service-probes
+```
+
+### Assets 分类插件
+
+基于指纹识别的结果对目标进行资产分类。
+
+配置参数：
+
+| 插件参数   | 用途说明
+|------------|------------------------------------|
+| enable     | 插件开关，true-启用，false-不启用
+| index      | 在所有插件中的处理顺序，值越小越优先处理，此插件必须在 Wapplayzer、Nmap 插件的后面执行。
+| ignore_vendors | 忽略的厂商名称（小写），用于排除一些不想要的厂商名称。
+
+相关配置文件：
+
+#### 资产类型配置文件
+
+```
+# rules/http_asset_types.json
+{
+    "<资产类型名>":[
+        <分类编号>, ...
+    ]
+}
+```
+用于识别 `pro` 为 `HTTP` 类的流量资产类型。
+
+工作原理：根据指纹分类来确定资产类型。
+
+```
+# rules/tcp_asset_types.json
+{
+    "<资产类型名>":[
+        "<关键词>", ...
+    ]
+}
+```
+用于识别 `pro` 为 `TCP` 类的流量资产类型。
+
+工作原理：根据指纹设备类型、指纹名称、指纹描述中的单词来确定设备类型。关键词不区分大小写。
+
+#### 设备类型配置文件
+
+```
+# rules/http_device_types.json
+{
+    "<设备类型名>":[
+        "<关键词>", ...
+    ]
+}
+```
+用于识别 `pro` 为 `HTTP` 类的流量设备类型。
+
+工作原理：根据指纹名称中的关键词来确定设备类型。
+
+```
+# rules/tcp_device_types.json
+{
+    "<设备类型名>":[
+        "<关键词>", ...
+    ]
+}
+```
+
+用于识别 `pro` 为 `TCP` 类的流量设备类型。
+
+工作原理：根据指纹设备类型以及指纹名称、指纹描述中的单词来确定设备类型。关键词不区分大小写。
+
+#### 设备厂商配置文件
+
+```
+# rules/vendors.json
+[
+    "<关键词>", ...
+]
+```
+
+厂商信息获取有两种方式：
+
+- 对于 `pro` 为 `HTTP` 的流量，可以通过指纹的 `website` 属性提取域名关键词获得，也可以根据指纹名称中的关键词获得；
+- 对于 `pro` 为 `TCP` 的流量，仅通过指纹中的 `name`、`info` 和 `device`来获取。关键词区分大小写。
+
 ## 运行环境
 
 - Python 3.x
@@ -40,19 +133,17 @@
 ## 文件说明
 
 ```
-Dockerfile               # 容器环境配置文件
-docker-compose.yml       # 容器启动配置文件
-src                      # 核心代码文件
-  config/plugin.yml      # 数据清洗插件配置文件
-  plugins                # 数据清洗插件存放路径
-    plugin.py            # 数据清洗插件基类，所有插件均需继承此类
+Dockerfile                 # 容器环境配置文件
+docker-compose.yml         # 容器启动配置文件
+src                        # 核心代码文件
+  config/plugin.yml        # 数据清洗插件配置文件
+  plugins                  # 数据清洗插件存放路径
+    plugin.py              # 数据清洗插件基类，所有插件均需继承此类
     ... ...
-  rules                  # 指纹规则库存放路径
-    apps.json            # Wappalyzer Web 应用指纹库
-    nmap-service-probes  # NMAP 端口服务指纹库
+  rules                    # 插件相关配置文件存放路径
     ... ...
-  main.py                # 主程序
-  requirements.txt       # 程序依赖库清单
+  main.py                  # 主程序
+  requirements.txt         # 程序依赖库清单
 ```
 
 [最新Web应用指纹库下载](https://github.com/AliasIO/Wappalyzer/raw/master/src/apps.json)
