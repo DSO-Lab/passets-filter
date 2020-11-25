@@ -82,7 +82,7 @@
 ```
 用于识别 `pro` 为 `TCP` 类的流量资产类型。
 
-工作原理：根据指纹设备类型、指纹名称、指纹描述中的单词来确定设备类型。关键词不区分大小写。
+工作原理：根据指纹设备类型、指纹名称、指纹描述、服务名中的单词来确定设备类型。关键词不区分大小写。
 
 #### 设备类型配置文件
 
@@ -167,7 +167,7 @@ OPTIONS:
   -t THREADS,   --threads=THREADS       设置并发线程数量，默认为 10 个线程
   -b BATCH_SIZE --batch-size=BATCH_SIZE 每线程单批处理的数据数量，默认为 20 条。
   -c CACHE_SIZE --cache-size=CACHE_SIZE 设置处理缓存的大小
-  -T CACHE_TTL  --cache-ttl=CACHE_TTL   设置处理缓存的过期时间，单位为秒，默认 600 秒
+  -T CACHE_TTL  --cache-ttl=CACHE_TTL   设置处理缓存的过期时间，单位为秒，默认 120 秒
   -m MODE       --mode=MODE             设置工作模式，默认为 1（主），可选值有 0（从）。
   -d DEBUG, --debug=DEBUG               调试信息开关，0-关闭，1-开启
 ```
@@ -203,6 +203,12 @@ nmap:
     - ^OK$
   ssl_portmap:      # ssl 协议端口映射表
     - 443:https
+
+asset:
+  enable: true
+  index: 3
+  ignore_vendors:   # 要忽略的厂商名称（小写）
+    - asp
 ```
 
 

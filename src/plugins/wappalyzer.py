@@ -699,34 +699,43 @@ if __name__ == '__main__':
     plugins = Plugin.loadPlugins(os.path.join(os.path.dirname(__file__), ".."), True)
     print(plugins)
     msg = {
-        "ip_num": 1875787536,
-        "ip": "111.206.63.16",
-        "host": "111.206.63.16:80",
-        #"header": "Date: Wed, 18 Nov 2020 08:51:40 GMT\r\nX-Content-Type-Options: nosniff\r\nX-Blueocean-Refresher: 538d9ffd\r\nLocation: http://192.168.199.24:8080/blue/organizations/jenkins/dep_host%20web_xss_in_tag=582355e15647a50ce83e3260cf4ce94c%20blah=/admin.aspx/\r\nContent-Length: 0\r\nServer: Jetty(9.4.27.v20200227)",
-        "header": "",
-        "@version": "1",
-        "inner": False,
-        "port": "80",
-        "tags": [],
-        "type": "text/html",
-        "server": "Server: Jetty(9.4.27.v20200227)",
         "pro": "HTTP",
-        "@timestamp": "2019-12-06T01:51:25.024Z",
-        "body": "<title>ADSL Router --Dlink</title>aaaProduct Page</span>: DSL-2512</div>",
-        "code": 200,
-        "url": "/blue/organizations/jenkins/dep_host%20web_xss_in_tag=582355e15647a50ce83e3260cf4ce94c%20blah=/admin.aspx",
-        "tag": "sensor-ens160"
+        "inner": True,
+        "site": "http://192.168.199.170",
+        "ip_str": "192.168.199.170",
+        "type": "text/html; charset=UTF-8",
+        "ip": "192.168.199.170",
+        "method": "GET",
+        "url": "http://192.168.199.170/",
+        "server": "Apache/2.4.6 (CentOS)",
+        "header": "Date: Mon, 23 Nov 2020 09:55:57 GMT\r\nServer: Apache/2.4.6 (CentOS)\r\nLast-Modified: Thu, 16 Oct 2014 13:20:58 GMT\r\nETag: \"1321-5058a1e728280\"\r\nAccept-Ranges: bytes\r\nContent-Length: 4897\r\nContent-Type: text/html; charset=UTF-8",
+        "@timestamp": "2020-11-23T09:55:48.018Z",
+        "@version": "1",
+        "tag": "eno2",
+        "geoip": {},
+        "tags": [
+            "_geoip_lookup_failure"
+        ],
+        "host": "192.168.199.170:80",
+        "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\"><html><head>\n<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\">\n\t\t<title>Apache HTTP Server Test Page powered by CentOS</title>\n\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n\n    <!-- Bootstrap -->\n    <link href=\"/noindex/css/bootstrap.min.css\" rel=\"stylesheet\">\n    <link rel=\"stylesheet\" href=\"noindex/css/open-sans.css\" type=\"text/css\" />\n\n<style type=\"text/css\"><!--\t\t \n\nbody {\n  font-family: \"Open Sans\", Helvetica, sans-serif;\n  font-weight: 100;\n  color: #ccc;\n  background: rgba(10, 24, 55, 1);\n  font-size: 16px;\n}\n\nh2, h3, h4 {\n  font-weight: 200;\n}\n\nh2 {\n  font-size: 28px;\n}\n\n.jumbotron {\n  margin-bottom: 0;\n  color: #333;\n  background: rgb(212,212,221); /* Old browsers */\n  background: radial-gradient(ellipse at center top, rgba(255,255,255,1) 0%,rgba(174,174,183,1) 100%); /* W3C */\n}\n\n.jumbotron h1 {\n  font-size: 128px;\n  font-weight: 700;\n  color: white;\n  text-shadow: 0px 2px 0px #abc,\n               0px 4px 10px rgba(0,0,0,0.15),\n               0px 5px 2px rgba(0,0,0,0.1),\n               0px 6px 30px rgba(0,0,0,0.1);\n}\n\n.jumbotron ",
+        "port": 80,
+        "url_tpl": "http://192.168.199.170/",
+        "code": "403",
+        "path": "/"
     }
     msg_update = {}
     for i in sorted(plugins.keys()):
         (pluginName, plugin) = plugins[i]
-        if pluginName == 'wappalyzer':
-            print('[!] Plugin {} processing ...'.format(pluginName))
-            ctime = time.time()
-            ret = plugin.execute(msg)
-            etime = time.time()
-            print('Eclipse time: {}'.format(etime-ctime))
-            print(json.dumps(ret, indent=2))
+        print('[!] Plugin {} processing ...'.format(pluginName))
+        ctime = time.time()
+        ret = plugin.execute(msg)
+        if ret:
+            msg.update(ret)
+        etime = time.time()
+        print('Eclipse time: {}'.format(etime-ctime))
+        print(json.dumps(ret, indent=2))
+
+    print(json.dumps(msg))
     #'''
 
     # # Test python engine

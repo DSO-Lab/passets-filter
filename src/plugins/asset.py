@@ -17,6 +17,7 @@ import hashlib
 import copy
 import traceback
 import threading
+import traceback
 
 from urllib import parse
 from plugin import Plugin, LogLevel
@@ -102,6 +103,7 @@ class FilterPlugin(Plugin):
             return True
         except Exception as e:
             self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return False
         finally:
             if fp: fp.close()
@@ -126,6 +128,7 @@ class FilterPlugin(Plugin):
             return True
         except Exception as e:
             self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return False
         finally:
             if fp: fp.close()
@@ -149,6 +152,7 @@ class FilterPlugin(Plugin):
                     self.http_asset_types[_] = key
             return True
         except Exception as e:
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             self.log(str(e), LogLevel.ERROR)
             return False
         finally:
@@ -174,6 +178,7 @@ class FilterPlugin(Plugin):
             return True
         except Exception as e:
             self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return False
         finally:
             if fp: fp.close()
@@ -191,16 +196,17 @@ class FilterPlugin(Plugin):
             return True
         except Exception as e:
             self.log(str(e), LogLevel.ERROR)
+            self.log(traceback.format_exc(), LogLevel.ERROR)
             return False
         finally:
             if fp: fp.close()
 
-    def parseTcpAssetType(self, name, info, device):
+    def parseTcpAssetType(self, name, info, device, service):
         """
         从指纹名称、信息、设备类型中识别资产类型
         """
         result = []
-        parts = "{} {} {}".format(name, info, device).lower().split(' ')
+        parts = "{} {} {} {}".format(name, info, device,  service).lower().split(' ')
         for _ in  parts:
             if not _: continue
             for key in self.tcp_asset_types:
@@ -310,7 +316,7 @@ class FilterPlugin(Plugin):
                     if _ not in info['device']:
                         info['device'].append(_)
 
-            asset_types = self.parseTcpAssetType(app['name'], app['info'], ' '.join(devices))
+            asset_types = self.parseTcpAssetType(app['name'], app['info'], ' '.join(devices), app['service'])
             if asset_types:
                 for _ in asset_types:
                     if _ not in info['asset_type']:
@@ -390,7 +396,7 @@ class FilterPlugin(Plugin):
             self.log('Not TCP/HTTP message.', LogLevel.DEBUG)
             return
 
-        info = {}
+        info = { 'asset_type': [], 'vendor': [], 'device': [], 'service': [], 'info': [] }
         if 'apps' not in msg:
             self.log('Fingerprint property "apps" not found.', LogLevel.ERROR)
             return
@@ -399,15 +405,12 @@ class FilterPlugin(Plugin):
             return
         
         # 识别资产分类
-        apps = {}
         pro = msg['pro'].upper()
         if pro == 'HTTP':
-            apps = self.analyzeHttp(msg['apps'])
+            info = self.analyzeHttp(msg['apps'])
         elif pro == 'TCP':
-            apps = self.analyzeTcp(msg['apps'])
+            info = self.analyzeTcp(msg['apps'])
         
-        info.update(apps)
-
         return info
 
 if __name__ == '__main__':

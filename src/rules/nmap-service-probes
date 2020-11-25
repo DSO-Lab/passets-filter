@@ -10,9 +10,9 @@
 # https://nmap.org/book/vscan-community.html
 #
 # This collection of probe data is (C) 1998-2020 by Insecure.Com
-# LLC.  It is distributed under the Nmap Open Source license as
-# provided in the COPYING file of the source distribution or at
-# https://nmap.org/data/COPYING .  Note that this license
+# LLC.  It is distributed under the Nmap Public Source license as
+# provided in the LICENSE file of the source distribution or at
+# https://nmap.org/data/LICENSE .  Note that this license
 # requires you to license your own work under a compatible open source
 # license.  If you wish to embed Nmap technology into proprietary
 # software, we sell alternative licenses (contact sales@insecure.com).
@@ -38,6 +38,10 @@ totalwaitms 6000
 # If the service closes the connection before 3 seconds, it's probably
 # tcpwrapped. Adjust up or down depending on your false-positive rate.
 tcpwrappedms 3000
+
+match Modbus m|Modbus.*Bridge| p/Modbus_Bridge/
+match Modbus m|Modbus-GPRS-Gateway  FTP Server Ready| p/Modbus-GPRS-Gateway-FTP/
+match HiNetGPON m|^CXNK00[\x00-\xff]+>\s$| p/Chunghwa Telecom HiNet GPON/
 
 match 1c-server m|^S\xf5\xc6\x1a{| p/1C:Enterprise business management server/
 
@@ -531,8 +535,9 @@ match drac-console m|^\0\0\0\x0c\0\0\0\?\0\0\0\x02$| p/Dell Remote Access Contro
 
 match dragon m|^UNAUTHORIZED\n\r\n\r$| p/Dragon realtime shell/
 
-match drobo-nasd m%^DRINASD\0\x01\x01\0\0\0\0..<\?xml version=\"1\.0\" encoding=\"utf-8\"\?>\n\n<ESATMUpdate>\n    <mESAUpdateSignature>ESAINFO</mESAUpdateSignature>\n    <mESAUpdateVersion>\d+</mESAUpdateVersion>\n    <mESAUpdateSize>\d+</mESAUpdateSize>\n    <mESAID>\w+</mESAID>\n    <mSerial>\w+</mSerial>\n    <mName>(Drobo(?:-FS|5N))?</mName>\n    <mVersion>([][\w._ ]+)</mVersion>\n    <mReleaseDate>([^<]+)</mReleaseDate>\n%s p/$1 NASD/ v/$2 ($3)/
-match drobo-dsvc m|^DRIDDSVC\x07\x01.\0\0\0..<ESATMUpdate>\r\n\t<mESAUpdateSignature>ESAINFO</mESAUpdateSignature>\r\n\t<mESAUpdateVersion>\d+</mESAUpdateVersion>\r\n\t<mESAUpdateSize>\d+</mESAUpdateSize>\r\n\t<mESAID>0db\d+</mESAID>\r\n\t<mSerial>tDB\d+</mSerial>\r\n\t<mName>Drobo(?:-FS)?</mName>\r\n\t<mVersion>([][\w._ ]+)</mVersion>\r\n\t<mReleaseDate>([^<]+)</mReleaseDate>\r\n|s p/Drobo-FS DDSVC/ v/$1 ($2)/
+# https://github.com/droboports/droboports.github.io/wiki/NASD-XML-format
+match drobo-nasd m|^DRINASD[9a]?\0\x01\x01\0\0\0\0..<\?xml version="1\.0" encoding="utf-8"\?>\n\n<ESATMUpdate>\n    <mESAUpdateSignature>ESAINFO</mESAUpdateSignature>\n    <mESAUpdateVersion>\d+</mESAUpdateVersion>\n    <mESAUpdateSize>\d+</mESAUpdateSize>\n    <mESAID>\w+</mESAID>\n    <mSerial>(\w+)</mSerial>\n    <mName>([^<]+)</mName>\n    <mVersion>([][\w._ ]+)</mVersion>\n|s p/Drobo NASD/ v/$3/ i/name: $2; sn: $1/
+match drobo-dsvc m|^DRIDDSVC\x07\x01.\0\0\0..<ESATMUpdate>\r\n\t<mESAUpdateSignature>ESAINFO</mESAUpdateSignature>\r\n\t<mESAUpdateVersion>\d+</mESAUpdateVersion>\r\n\t<mESAUpdateSize>\d+</mESAUpdateSize>\r\n\t<mESAID>0db\d+</mESAID>\r\n\t<mSerial>(tDB\d+)</mSerial>\r\n\t<mName>([^<]+)</mName>\r\n\t<mVersion>([][\w._ ]+)</mVersion>\r\n|s p/Drobo-FS DDSVC/ v/$3/ i/name: $2; sn: $1/
 
 match drweb m|^0 PROTOCOL 2 [23] AGENT,CONSOLE,INSTALL| p/DrWeb/
 
@@ -572,9 +577,9 @@ match envisalink m|^5053CD\r\n| p/EyezOn EnvisaLink/ d/security-misc/
 
 match epoptes-client m|^\ndie\(\) {\n    echo \"epoptes-client ERROR: \$@\" >&2\n    exit 1\n}\n\ninfo\(\) {\n    local server_ip def_iface\n\n    if \[ -z \"\$cached_info\" \]; then\n        VERSION=\${VERSION:-([\d.]+)}| p/Epoptes LTSPd/ i/compat version $1/ cpe:/a:epoptes:epoptes/
 match epp m|^\x00\x00..<\?xml version=\"1\.0\" encoding=\"UTF-8\" standalone=\"no\" \?>\n<epp xmlns=\"http://www\.yoursrs\.com/xml/epp/epp-1\.0\" xmlns:xsi=\"http://www\.w3\.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www\.yoursrs\.com/xml/epp/epp-1\.0 epp-1\.0\.xsd\">\n\n  <greeting>\n    <svID>([^<]+)</svID>\n    <svDate>.*</svDate>\n    <svcMenu>\n      <version>([\w._-]+)</version>\n|s p/Extensible Provisioning Protocol/ v/$2/ h/$1/
-softmatch epp m|^\0...<\?xml version=\"1\.0\" encoding=\"UTF-8\" standalone=\"no\"\?><epp xmlns=\"urn:ietf:params:xml:ns:epp-1\.0\".*<svID>([^<]+)</svID>|s p/Extensible Provisioning Protocol/ h/$1/
+softmatch epp m|^\0...<\?xml version="1\.0" encoding="[uU][tT][fF]-8" standalone="no"\?>\s*<epp xmlns="urn:ietf:params:xml:ns:epp-1\.0".*<svID>([^<]+)</svID>|s p/Extensible Provisioning Protocol/ i/name: $1/
 # RFC 5730
-softmatch epp m|^\0...<\?xml version=\"1\.0\" encoding=\"UTF-8\" standalone=\"no\"\?><epp xmlns=\"urn:ietf:params:xml:ns:epp-1\.0\"|s
+softmatch epp m|^\0...<\?xml version="1\.0" encoding="[uU][tT][fF]-8" standalone="no"\?>\s*<epp xmlns="urn:ietf:params:xml:ns:epp-1\.0"|s
 
 match eve-online m|^7\0\0\0~\0\0\0\0\x14\x06\x04\xe8\x99\x02\0\x05\xeb\0\x04\xdf\x92\0\0\n\xd7\xa3p=\n\xd7\x18@\x04\x95\xf1\x01\0\x13\x13EVE-EVE-RELEASE@ccp$| p/EVE Online game server/
 match eve-online m|^:\0\0\0~\0\0\0\0\x14\x07\x04\xe8\x99\x02\0\x05\x3b\x01\x05\x03k\n333333\x1d@\x04\re\x05\0\x13\x17EVE-EVE-TRANQUILITY@ccp\x01$| p/EVE Online game server/ i/Tranquility server/
@@ -713,6 +718,7 @@ match ftp m|^220 FTP print service:V-(\d[-.\w]+)/Use the network password for th
 match ftp m|^220- APC FTP server ready\.\r\n220 \r\n$| p/APC ftp server/ d/power-device/
 # HP-UX 10.x or AIX
 match ftp m|^220 ([-\w]+) FTP server \(Version (\d[\w._-]+) [A-Z][a-z]{2} [A-Z][a-z]{2} .*\) ready\.\r\n| p/HP-UX or AIX ftpd/ v/$2/ o/Unix/ h/$1/
+match ftp m|^220 Serveur FTP ([\w.-]+) \(Version ([\d.]+) [\w: ]+\) pr\xeat\.\r\n| p/HP-UX or AIX ftpd/ v/$2/ i/French/ h/$1/
 match ftp m|^220[- ]Roxen FTP server running on Roxen (\d[-.\w]+)/Pike (\d[-.\w]+)\r\n| p/Roxen ftp server/ v/$1/ i/Pike $2/
 # Debian packaged oftpd 0.3.6-51 on Linux 2.6.0-test4 Debian
 match ftp m|^220 Service ready for new user\.\r\n| p/oftpd/ o/Unix/
@@ -1797,6 +1803,7 @@ match intertel-ctl m|^\x1f\x19\x0e\x01\0\x01\x01\x01\x02\x02\x03\x02\x01\x04\x11
 match intranetchat m|^\d+\0FORWARD\0\x0b\xc2c\x0c\xc1a\x9f@| p/Intranet Chat Server/
 
 match ipcam m|^\0\0\0\x10\0\0\0\x1e\0\0\0\x1e\0\0\0\0| p/Hikvision IPCam control port/
+match ipcam m|^8\0\0\0l\0{19}....\0\0\0\0\xc4\x87#@\0\0\0\0\xf5\x8f\x05Tmrmt_hello\0{26}\x0e\0\0\0\xe8\x87#@\0\0\0\x00(\w+)\n\0| p/LeFun or MAISI IP camera/ i/ID: $1/ d/webcam/
 
 match ipmi-advertiserd m|^\x0e\0\0\0\0\0\0$| p/SuperMicro IPMI advertiserd/ d/remote management/ cpe:/o:supermicro:intelligent_platform_management_firmware/
 
@@ -2360,8 +2367,14 @@ match oftp m|^\x10\0\0\x17IODETTE FTP READY \r$| p/ODETTE File Transfer Protocol
 match oo-defrag m|^\x99\0\0\0\x01\0\0\0\x03\0\0\0\xb9\x08\0\0\x02\0\0\0\x01\0\0\0\0\0\0\0N\x06\0\0\0\0\0\0\x01\0\0\0\0\0\0\0\n\x0b\0\0\0\xe8\xff\x01\0\x95\x8a\x01\0\0\0\0\0\0\0\0\0\x12\0\0\0 o\0\0\x13\0\0\0p\0\0\0\xf5\x01\0\0\x8c\x02\0\0\x1c\x01\0\0\x01\0\0\0\x03\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0gM1\x06\0\0\0\0\x01\0\0\0gM1\x06\0\0\0\0\x98\xadm\t\0\0\0\0\x02\0\0\0\xff\xfa\x9e\x0f\0\0\0\0\0\xff\r\x06\0\0\0\0\x99\0\0\0\x01\0\0\0\x03\0\0\0\xb9\x08\0\0\x02\0\0\0\x01\0\0\0\0\0\0\0N\x06\0\0\0\0\0\0\x01\0\0\0\0\0\0\0\x04\x0b\0\0\0\xe8\xff\x01\0\x95\x8a\x01\0\0\0\0\0\0\0\0\0\x12\0\0\0!o\0\0\x13\0\0\0p\0\0\0\xf5\x01\0\0\x8c\x02\0\0\x1c\x01\0\0\0\0\0\0\x03\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0gM1\x06\0\0\0\0\x01\0\0\0gM1\x06\0\0\0\0\x98\xadm\t\0\0\0\0\x02\0\0\0\xff\xfa\x9e\x0f\0\0\0\0\0\xff\r\x06\0\0\0\0\x99\0\0\0\x01\0\0\0\x03\0\0\0\xb9\x08\0\0\x02\0\0\0\x01\0\0\0\0\0\0\0o\x0e\0\0\0\0\0\0\x01\0\0\0\0\0\0\0\n\x0b\0\0\0\xe8\xff\x01\0\x95\x8a\x01\0\0\0\0\0\0\0\0\0\x12\0\0\0 o\0\0\x13\0\0\0p\0\0\0\xf5\x01\0\0\x8c\x02\0\0\x1c\x01\0\0\x01\0\0\0\x03\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0gM1\x06\0\0\0\0\x01\0\0\0gM1\x06\0\0\0\0\x98\xadm\t\0\0\0\0\x02\0\0\0\xff\xfa\x9e\x0f\0\0\0\0\0\xff\r\x06\0\0\0\x006\x01\0\0\x01\0\0\0\x03\0\0\0\x07\x08\0\0\x02\0\0\0\x07\x052Q\0\0L\^\x03\0\0\0\0\0\xa2\x88\0\0\0\0\0\0\xd9\xe6\x03\0\0\0\0\0\xb9\x02\0\0\0\0\0\0\x0e\x0b\0\0\0\0\0\0\)\xb8\x02\0\0\0\0\0\xed\x07\x95\?\0\0C\xad/\+i\0t\r\0\0\0\0\0\0{{\x16\x05\0\0\0\0\0\0\0\0\xd0\0\0\0((?:[^\0]\0)+)\0\x006\x01\0\0\x01\0\0\0\x03\0\0\0\x07\x08\0\0\x02\0\0\0\x07\x052Q\0\0L\^\x03\0\0\0\0\0\xa2\x88\0\0\0\0\0\0\xd9\xe6\x03\0\0\0\0\0\xb9\x02\0\0\0\0\0\0\x0e\x0b\0\0\0\0\0\0\)\xb8\x02\0\0\0\0\0\xed\x07\x95\?\0\0C\xad/\+i\0t\r\0\0\0\0\0\0{{\x16\x05\0$|s p/O&O Defrag Professional/ v/15/ i/path: $P(1)/
 
 # https://wiki.wireshark.org/OpenFlow
-# 4-byte TXID is random in OpenDaylight, sequential in POX
-softmatch openflow m|^\x01\0\0\x08....$| i/OpenFlow 1.0/
+# 4-byte TXID is random in OpenDaylight, sequential in POX, and decrementing from 0xFFFFFFFF in floodlight.
+# An extension may or may not be sent, account for both cases.
+match openflow m|^\x06\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.5.x/
+match openflow m|^\x05\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.4.x/
+match openflow m|^\x04\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.3.x/
+match openflow m|^\x03\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.2/
+match openflow m|^\x02\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.1/
+match openflow m|^\x01\0\0(?:\x10....\0\x01\0)?\x08....$|s p/OpenFlow/ v/1.0/
 
 match openfpc m|^OFPC READY\n$| p/OpenFPC packet capture/
 
@@ -4972,6 +4985,7 @@ match tinyfw m|^\x0f\0\n\0\x01\0\0\0\0\x02\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
 
 match trackmania-gbx m|^\x0b\0\0\0GBXRemote 2$| p/TrackMania game GBX remote/
 
+match ums-webviewer m|^UMSA\x14\0\0\0\x01\x01\x01\0\0\0\0\0\x01\0\0\0| p/UMS WebViewer video stream/ d/webcam/
 match unknown m|^\r\n%connection refused by remote host\.$| p/Cisco or HP network device sshd or telnetd/ i/connection refused/
 
 match upnp m|^HTTP/0\.0 400 Bad Request\r\nSERVER: Unspecified, UPnP/1\.0, Unspecified\r\nCONTENT-LENGTH: 50\r\nCONTENT-TYPE: text/html\r\n\r\n<html><body><h1>400 Bad Request</h1></body></html>| p/Belkin Wemo upnpd/ i/UPnP 1.0/ d/power-misc/
@@ -5279,6 +5293,10 @@ softmatch elf-exe m|^.{0,4}\x7fELF\x02[\x01\x02]\x01| p/ELF 64-bit executable fi
 
 
 match smtp m|^220 ([-.+\w]+) Esmtp (.+)| p/smtp/
+
+match ftp m|^220 Welcome to the FreeRTOS\+TCP FTP server\r\n| p/FreeRTOS ftpd/ o/FreeRTOS/ cpe:/o:amazon:freertos/
+
+match telnet m|^Welcome to FreeRTOS telnet server\r\n| p/FreeRTOS telnetd/ o/FreeRTOS/ cpe:/o:amazon:freertos/
 ##############################NEXT PROBE##############################
 Probe TCP GenericLines q|\r\n\r\n|
 rarity 1
@@ -5812,6 +5830,7 @@ match asf-rmcp m|^\0\0\0\x02\t\0\0\0\x01\0\0\0\0\0\0\0\0$| p/SuperMicro IPMI RMC
 match ircbot m|^ \r\nSorry, that nickname format is invalid\.\r\r\n$| p/Diverse IRC bot/
 
 match irc m|^:([-\w_.]+) 421 \r\n\r\n :\r\n\r\n unimplemented protocol request\r\n:[-\w_.]+ 421 \r\n\r\n :\r\n\r\n unimplemented protocol request\r\n| p/Crackalaka ircd/ h/$1/
+match irc m|^:([-\w_.]+) 421  : Unknown command\r\n:[-\w_.]+ 421  : Unknown command\r\n| p/Free Lightweight IRC Program ircd/ h/$1/ cpe:/a:freenet:flip/
 
 match irc-proxy m|^\+OK \r\n-ERR XXX authorization first\r\n$| p/muh irc proxy/
 
@@ -7410,7 +7429,7 @@ match http m|^HTTP/1\.1 200 OK\r\nMIME-Version: 1\.0\r\nServer: JC-HTTPD/([\d.]+
 match http m|^HTTP/1\.1 200 OK\r\nMIME-Version: 1\.0\r\nServer: JC-HTTPD/([\d.]+)\r\n.*<title>Sharp(AR-\w+) - TOP PAGE -</title>|s p/JC-HTTPD/ v/$1/ i/Sharp $2 network card http config/ d/printer/
 match http m|^HTTP/1\.1 404 Not Found\r\nMIME-Version: 1\.0\r\nServer: JC-HTTPD/([\d.]+)\r\nConnection: close\r\nContent-Type: text/html;\r\nContent-Length: 306\r\nAccept-Ranges: none\r\n\r\n<HTML>\r\n<HEAD><META HTTP-EQUIV=\"content-type\" CONTENT=\"text/html; charset=x-sjis\">\r\n<TITLE>HTTP 1\.0/404</TITLE>\r\n|s p/JC-HTTPD/ v/$1/ i/Sharp AR-M550N printer http config/ d/printer/ cpe:/h:sharp:ar-m550n/a
 # Sharp, Ricoh
-match http m|^HTTP/1\.1 \d\d\d .*\r\nMIME-Version: 1\.0\r\nServer: JC-SHTTPD/([\d.]+)\r\n| p/JC-SHTTPD/ v/$1/ d/printer/
+match http m|^HTTP/1\.1 \d\d\d .*\r\nMIME-Version: 1\.0\r\nServer: JC(-S?)HTTPD/([\d.]+)\r\n| p/JC$1HTTPD/ v/$2/ d/printer/
 match http m|^HTTP/1\.1 200 OK\r\nMIME-Version: 1\.0\r\nServer: JC-HTTPD/([\w._-]+)\r\nConnection: close\r\nContent-Type: text/html\r\nContent-Length: \d+\r\nAccept-Ranges: none\r\n\r\n<html>\r\n<head>\r\n<title>(SX-\w+)</title>\r\n| p/JC-HTTPD/ v/$1/ i/Silex $2 USB bridge http config/ d/bridge/ cpe:/h:silex:$2/
 match http m|^HTTP/1\.1 200 OK\r\nMIME-Version: 1\.0\r\nServer: JC-HTTPD/([\w._-]+)\r\nConnection: close\r\nContent-Type: text/html;charset=x-sjis\r\nContent-Length: \d+\r\nAccept-Ranges: none\r\n\r\n<HTML><HEAD><TITLE>([\w._-]+/[\w._-]+) HomePage</TITLE>.*<NOFRAMES>This page is only for InternetExplorer3\.0\(or later\) and NetScape Navigator3\.0\(or later\)\.</NOFRAMES>|s p/JC-HTTPD/ v/$1/ i/Star Micronics TSP700 printer/ d/printer/ h/$2/ cpe:/h:starmicronics:tsp700/a
 
@@ -8190,9 +8209,9 @@ match http m|^HTTP/1\.1 \d\d\d (?:[^\r\n]*\r\n(?!\r\n))*?Server: JAGeX/([-\w_.]+
 match http m|^HTTP/1\.0 \d\d\d .*\r\nServer: \r\nDate: .*\r\nWWW-Authenticate: Basic realm=\"BSkyB (\w+) \"\r\n| p/BSkyB $1 http config/ d/broadband router/
 match http m|^HTTP/1\.0 \d\d\d .*\r\nServer: \r\nDate: .*\r\nWWW-Authenticate: Basic realm=\"WBR-(\w+)\"\r\n| p/LevelOne WBR-$1 http config/ d/broadband router/
 match http m|^HTTP/1\.0 \d\d\d (?:[^\r\n]*\r\n(?!\r\n))*?Server: \r\n.*<meta name=\"description\" content=\"DG(\w+) \d+\">\n|s p/Netgear DG$1 http config/ d/broadband router/
-match http m|^HTTP/1\.1 \d\d\d (?:[^\r\n]*\r\n(?!\r\n))*?\r\nconnection: Keep-Alive\r\ncontent-length:.*<script src=\"all/kernel/public/lib/rc/js/system/currentVersion\.xjs\?command=WSTGetVersion\" type=\"text/javascript\"></script>|s p/Samsung SyncThru http config/ d/printer/
+match http m|^HTTP/1\.1 \d\d\d (?:[^\r\n]*\r\n(?!\r\n))*?\r\nconnection: Keep-Alive\r\ncontent-length:.*<script src=\"all/kernel/public/lib/rc/js/system/currentVersion\.xjs\?command=WSTGetVersion\" type=\"text/javascript\"></script>|s p/Samsung SyncThru http config/ d/printer/ cpe:/a:samsung:syncthru_web_service/
 # Samsung CLX-3175FW
-match http m|^HTTP/1\.0 200 OK\r\n.*<title>SyncThru Web Service</title>\r\n\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\r\n\r\n<script src=\"js/cookieCode\.js\">|s p/Samsung SyncThru http config/ d/printer/
+match http m|^HTTP/1\.0 200 OK\r\n.*<title>SyncThru Web Service</title>\r\n\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\r\n\r\n<script src=\"js/cookieCode\.js\">|s p/Samsung SyncThru http config/ d/printer/ cpe:/a:samsung:syncthru_web_service/
 match http m|^HTTP/1\.0 \d\d\d .*<title>LaCie EdMini NAS</title>|s p/Lacie BigDisk NAS http config/ d/storage-misc/
 match http m|^HTTP/1\.1 200 OK\r\nServer: Virata-EmWeb/R([\d_]+)\r\n.*<title>HP Color LaserJet (\w+)|s p/Virata-EmWeb/ v/$SUBST(1,"_",".")/ i/HP LaserJet $2 http config/ d/printer/ cpe:/a:virata:emweb:$SUBST(1,"_",".")/a cpe:/h:hp:laserjet_$2/
 match http m|^HTTP/1\.0 \d\d\d .*\r\nDate: .*\r\nServer: BarracudaHTTP ([\d.]+)\r\n| p/BarracudaHTTP/ v/$1/ i/Barracuda Networks Load Balancer http config/ d/load balancer/
@@ -9367,6 +9386,7 @@ match http m|^HTTP/1\.0 \d\d\d [^\r\n]+\r\n[Cc]ontent-[Tt]ype: application/json;
 match http m|^HTTP/1\.0 \d\d\d [^\r\n]+\r\n[Cc]ontent-[Tt]ype: application/json; charset=UTF-8\r\n[Cc]ontent-[Ll]ength: \d+\r\n\r\n{.*?"name" : "([^"]+)",\n  "cluster_name" : "([^"]+)",(?:\n  "cluster_uuid" : "[^"]*",)?\n  "version" : {\n    "number" : "([\w._-]+)",.*"lucene_version" : "([^"]+)"|s p/Elasticsearch REST API/ v/$3/ i/name: $1; cluster: $2; Lucene $4/ cpe:/a:apache:lucene:$4/ cpe:/a:elasticsearch:elasticsearch:$3/
 match http m|^HTTP/1\.0 \d\d\d [\w ]+\r\n[Cc]ontent-[Tt]ype: application/json; charset=UTF-8\r\n[Cc]ontent-[Ll]ength: \d+\r\n\r\n{.*"name" : "([^"]+)",(?:\r?\n  "cluster_uuid" : "[^"]*",)?\r?\n  "version" : {\r?\n    "number" : "([^"]+)",.*"lucene_version" : "([^"]+)"}|s p/Elasticsearch REST API/ v/$2/ i/name: $1; Lucene $3/ cpe:/a:apache:lucene:$3/ cpe:/a:elasticsearch:elasticsearch:$2/
 match http m|^HTTP/1\.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm="([^"]+)"(?:[^\r\n]*\r\n)*?\r\n\{"error":\{"root_cause":\[\{"type":"security_exception","reason":"missing authentication token for REST request \[/|s p/Elasticsearch REST API/ i/Shield plugin; realm: $1/ cpe:/a:elasticsearch:elasticsearch/
+match http m|^HTTP/1\.0 401 Unauthorized\r\nWWW-Authenticate: Digest realm="([^"]+)",nonce="[\da-f]{32}"\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 19\r\n\r\nUnauthorized access| p/Elasticsearch REST API/ i/realm: $1/ cpe:/a:elasticsearch:elasticsearch/
 
 match http m|^HTTP/1\.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"NETWORK\"\r\nContent-Type: text/html\r\nServer: Lancam Server\r\n\r\n| p/American Dynamics EDVR security recorder/ d/security-misc/
 match http m|^HTTP/1\.0 200 OK\r\n(?:[^\r\n]+\r\n)*?Server: Muratec Server Ver\.([\w._-]+)\r\n.*<TITLE>Administration tool for IF-300</TITLE>\r\n|s p/Muratec IF-300 network module http config/ v/$1/ i/for F-320 printer/ d/printer/ cpe:/h:muratec:f-320/ cpe:/h:muratec:if-300/
@@ -9728,6 +9748,7 @@ match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nAccess-Control-Allow-Orig
 match http m|^HTTP/1\.1 200 OK\r.*\nlibAbsinthe: (r[\d.]+)\r\n|s p/Legify Absinthe/ v/$1/
 match http m|^HTTP/1\.1 200 OK\r\n(?:[^\r\n]+\r\n)*?Server: Web Server\r\nContent-Type: text/html\r\n(?:[^\r\n]+\r\n)*?\r\n   \r\n<!DOCTYPE HTML PUBLIC.*<TITLE>NETGEAR ([^<]+)</TITLE>|s p/Netgear $1 http config/ d/switch/ cpe:/h:netgear:$1/a
 match http m|^HTTP/1\.0 401 Unauthorized\r\nContent-Length: 0\r\nWWW-Authenticate: Basic realm=\"Domoticz\.com\"\r\n\r\n|s p/Domoticz home automation httpd/
+match http m|^HTTP/1\.1 200 OK\r\nLast-Modified: .*\r\nContent-Length: \d+\r\nContent-Type: text/html;charset=UTF-8\r\nAccess-Control-Allow-Origin: \*\r\n\r\n<!DOCTYPE html>\n<html manifest="html5\.appcache">\n<head>\n\t\t<meta charset="utf-8">\n\t\t<title>Domoticz</title>| p/Domoticz home automation httpd/
 match http m|^HTTP/1\.0 302 Redirect\r\nSet-Cookie: mainServerInstance=; path=/\r\nSet-Cookie: CrushAuth=| p/CrushFTP web interface/ cpe:/a:crushftp:crushftp/
 match http m|^HTTP/1\.1 401 Unauthorized\r\nSet-Cookie: mainServerInstance=; path=/\r\nSet-Cookie: CrushAuth=| p/CrushFTP web interface/ cpe:/a:crushftp:crushftp/
 match http m|^HTTP/1\.1 200 OK\r\nServer: pyTivo/([\d.]+)\r\n| p/pyTivo http interface/ v/$1/ d/media device/
@@ -9997,7 +10018,7 @@ match http m|^HTTP/1\.0 200 OK\r\nDate: .*\r\nContent-Type: text/html; charset=u
 match http m|^HTTP/1\.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \d+\r\n(?:X-FRAME-OPTIONS: SAMEORIGIN\r\n)?Content-Disposition: \r\n\r\n<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<script src=\"js/AgentLog\.js\">| p/McAfee ePolicy Orchestrator Agent Activity Log httpd/ cpe:/a:mcafee:epolicy_orchestrator_agent/
 # Fallback
 match http m|^HTTP/1\.1 405 Method Not Allowed\r\nConnection: close\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n12\r\nMethod Not Allowed\r\n0\r\n\r\n| p/OpenWrt uHTTPd/ d/WAP/ o/Linux/ cpe:/a:openwrt:uhttpd/ cpe:/o:linux:linux_kernel/a
-match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \d+\r\nCache-Control: max-age=0, no-store, no-cache\r\nx-enc: Ext1, Basic\r\nServer: Samsung ([\w ]+) Series, sn=([\dA-Z]+)\r\n\r\n| p/Samsung SyncThru Web Service/ i/$1 series; SN: $2/ d/printer/
+match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \d+\r\nCache-Control: max-age=0, no-store, no-cache\r\nx-enc: Ext1, Basic\r\nServer: Samsung ([\w ]+) Series, sn=([\dA-Z]+)\r\n\r\n| p/Samsung SyncThru Web Service/ i/$1 series; SN: $2/ d/printer/ cpe:/a:samsung:syncthru_web_service/
 match http m|^HTTP/1\.1 200 OK\r\nContent-type: text/html\r\nExpires: .*\r\nConnection: close\r\nPragma: no-cache\r\nCache-Control: no-store, no-cache, must-revalidate\r\nContent-Length: \d+\r\n\r\n<html>\n\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n<script>product=\"HOTBOX\"| p/Hot Hotbox router admin httpd/ d/broadband router/ cpe:/h:hot:hotbox/
 match http m|^HTTP/1\.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 56\r\nDate: .*\r\nConnection: close\r\n\r\nTypeError: Object #<ServerResponse> has no method 'send'| p/Tizen Multiscreen SDK httpd/ d/media device/
 match http m|^HTTP/1\.1 401 Authentication Required\r\nWWW-Authenticate: Basic realm=\"([\d.]+)\"\r\nRefresh: 0;URL=\"/ui/logout\.htm\"\r\nServer: Blue-Coat-CacheFlow-Appliance\r\nCache-Control: no-store\r\nSet-Cookie: BCSI_MC=| p/Blue Coat CacheFlow appliance web ui/ i/IP $1/
@@ -10039,7 +10060,7 @@ match http m|^HTTP/1\.1 302 Found\r\nDate: .*\r\nCache-Control: no-cache\r\nX-Ru
 match http m|^HTTP/1\.0 401 Authorization Required\r\nWWW-Authenticate: BASIC realm="(DPR?-\d[^)]+)"\r\n\r\nPassword Error\.| p/D-Link $1 print server httpd/ d/print server/ cpe:/h:dlink:$1/a
 match http m|^HTTP/1\.1 200 OK\r\nContent-type: text/html\r\nExpires: Thu, 3 Oct 1968 12:00:00 GMT\r\nPragma: no-cache\r\nCache-Control: no-cache, must-revalidate\r\nConnection: close\r\nContent-Length: \d+\r\n\r\n| p/Cisco Docsis cable modem http admin/ d/broadband router/
 match http m|^HTTP/1\.1 200 OK\r\nDate: .*\r\nSet-Cookie: SiteName64=[^;]+; Expires=Sat, 31 Dec 2050 23:59:59 GMT\r\nSet-Cookie: SiteName=([^;]+);.*\r\nSet-Cookie: SiteAddress64=.*\r\nSet-Cookie: SiteAddress=([^;]+);.*\r\nSet-Cookie: Build64=.*\r\nSet-Cookie: Build=(\d+);.*\r\nSet-Cookie: Version64=.*\r\nSet-Cookie: Version=([^;]+);.*\r\nCONTENT-LENGTH: \d+\r\n| p/aPod Access Control system master controller/ v/$SUBST(4,"%2E",".")/ i/site: $SUBST(1,"%20"," "); address: $SUBST(2,"%20"," "); build: $3/ d/security-misc/ cpe:/a:online_security_technologies:apod:$SUBST(4,"%2E",".")/
-match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \d+\r\nCache-Control: max-age=0, no-store, no-cache\r\n\r\n<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><link rel="shortcut icon" href="/sws/images/fav\.ico" type="image/x-icon" />| p/Samsung SyncThru Web Service/ d/printer/ cpe:/a:samsung:syncthru_web_service/
+match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nContent-Type: text/html(?:; charset=utf-8)?\r\nContent-Length: \d+\r\nCache-Control: max-age=0, no-store, no-cache\r\n\r\n<html>[\r\n]*<head>[\r\n]*<meta http-equiv="Content-Type" content="text/html; charset=utf-8">[\r\n]*<link rel="shortcut icon" href="/sws/images/fav\.ico" type="image/x-icon" />| p/Samsung SyncThru Web Service/ d/printer/ cpe:/a:samsung:syncthru_web_service/
 match http m|^HTTP/1\.1 401 Unauthorized\r\nServer: BBVS/([\d.]+)\r\nWWW-Authenticate: Basic realm="SecuritySpy Web Server"\r\n| p/BBVS video streaming httpd/ v/$1/ i/SecuritySpy surveillance software/ o/Mac OS X/ cpe:/a:ben_software:bbvs:$1/ cpe:/a:ben_software:securityspy/ cpe:/o:apple:mac_os_x/a
 match http m|^HTTP/1\.1 200 OK\r\nCACHE-CONTROL: no-cache\r\nDate: .*\r\nConnection: Keep-Alive\r\nContent-Type: text/html\r\nContent-Length: \d+\r\n\r\n<html>\n<head>\n<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />\n<title>replace</title>| p/Huawei HG532e ADSL modem http admin/ d/broadband router/ cpe:/h:huawei:hg532e/a
 match http m|^HTTP/1\.1 200 OK\r\nServer: magic iradio\r\nCache-Control: max-age=0, no-cache\r\nContent-Type: text/html\r\nContent-Length: \d+\r\n\r\n| p/AGK WiFi Internet radio http config/ d/media device/
@@ -10154,6 +10175,7 @@ match http m|^HTTP/1\.0 200 OK\r\nCache-control: no-cache\r\nConnection: Keep-Al
 match http m|^HTTP/1\.0 200 OK\r\nDate: .* GMT\r\nServer: DNVRS-Webs\r\nETag: "[a-f\d-]+"\r\nContent-Length: \d+\r\nContent-Type: text/html\r\nConnection: close\r\nLast-Modified: .* GMT\r\n\r\n| p/Hikvision Network Video Recorder http admin/ d/webcam/
 match http m|^HTTP/1\.1 \d\d\d .*\r\nServer: DVRDVS-Webs\r\n| p/Hikvision DVR web UI/ d/media device/
 match http m|^HTTP/1\.1 \d\d\d .*\r\nDate: .* GMT\r\nServer: DVRDVS-Webs\r\n| p/Hikvision DVR web UI/ d/media device/
+match http m|^HTTP/1\.0 302 Redirect\r\nServer: Webs\r\nDate: [\w\d: ]{24}\r\nPragma: no-cache\r\nCache-Control: no-cache\r\nContent-Type: text/html\r\nLocation: http://[^/]*/index\.asp\r\n\r\n| p/Hikvision DVR web UI/ d/media device/
 match http m|^HTTP/1\.1 200 OK\r\nCache-Control: no-store\r\nContent-Type: text/html\r\nContent-length: \d+\r\n\r\n<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4\.01//EN" "http://www\.w3\.org/TR/html4/strict\.dtd"><html id=htmlID><head><title>[^<]+</title><style type="text/css">\*\{padding:0;margin:0\}html,body\{background:url\("dark_carbon\.png"\) repeat;| p/ControlByWeb X-310 controller web interface/ cpe:/h:controlbyweb:x-310/
 match http m|^HTTP/1\.0 200 OK\r\nContent-Type: text/html\r\nAccept-Ranges: bytes\r\nETag: "-?\d+"\r\nLast-Modified: .* GMT\r\nContent-Length: \d+\r\nConnection: close\r\nDate: .* GMT\r\nServer: none\r\n\r\n<!-- saved from url=\(0014\)about:internet -->\n<html lang="en">\n\n<!-- \nSmart developers always View Source\. \n\nThis application was built using Adobe Flex, an open source framework\nfor building rich Internet applications that get delivered via the\nFlash Player or to desktops via Adobe AIR\. \n\nLearn more about Flex at http://flex\.org \n// -->\n\n<head>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n\n<!--  BEGIN Browser History required section -->\n<link rel="stylesheet" type="text/css" href="history/history\.css" />\n<!--  END Browser History required section -->\n\n<title>Fireware XTM WebUI</title>| p/WatchGuard Fireware XTM web UI/ i/CometCatchr Flash Comet client/ cpe:/a:progrium:cometcatchr/ cpe:/a:watchguard:fireware_xtm/
 match http m|^HTTP/1\.1 401 Unauthorized\r\nAccess-Control-Allow-Origin: \*\r\nWWW-Authenticate: Basic realm="Protected"\r\nConnection: close\r\n\r\n401 Unauthorized: Password required\r\n$| p/ANEL-Elektronik NET-PwrCtrl HUT httpd/ d/power-misc/
@@ -10202,7 +10224,7 @@ match http m|^HTTP/1\.[01] \d\d\d .*\r\nDate: .*\r\nServer: xxxxxxxx-xxxxx\r\n| 
 match http m|^HTTP/1\.1 302 Found\r\nLocation: https://:8010/\r\nConnection: close\r\n\r\n$| p/Fortinet FortiGuard block page/ d/security-misc/
 match http m|^HTTP/1\.1 400 Bad Request\r\nContent-Length: 13\r\nConnection: close\r\n\r\nBAD REQUEST :>| p/Flightradar24 fr24feed settings httpd/ cpe:/a:flightradar24:fr24feed/
 match http m|^HTTP/1\.0 404\r\nServer: Standard ERP ([\d.]+) \d{4}-\d\d-\d\d\r\nDate: | p/HansaWorld Standard ERP/ v/$1/ cpe:/a:hansaworld:standard_erp:$1/
-match http m|^HTTP/1\.1 200 OK\r\nX-UA-Compatible: IE=edge\r\nX-Graylog-Node-ID: [a-f\d-]{36}\r\nVary: Accept-Encoding\r\nContent-Type: text/html\r\nDate: .*\r\nConnection: close\r\nContent-Length: \d+\r\n\r\n| p/Graylog2 web interface/ cpe:/a:graylog:graylog2/
+match http m|^HTTP/1\.1 200 OK\r\nX-UA-Compatible: IE=edge\r\nX-Graylog-Node-ID: [a-f\d-]{36}\r\n(?:Vary: Accept-Encoding\r\n)?Content-Type: text/html\r\nDate: .*\r\nConnection: close\r\nContent-Length: \d+\r\n\r\n| p/Graylog2 web interface/ cpe:/a:graylog:graylog2/
 match http m|^HTTP/1\.0 411 Length Required\r\nDate: .*\r\nServer: RedBack Application Server ([\d.]+)\r\n| p/IBM RedBack Application Server SOAP/ v/$1/ cpe:/a:ibm:redback_application_server:$1/
 match http m|^HTTP/1\.0 403 Forbidden\r\nConnection: close\r\nContent-Type: text/html\r\n\r\n<h1>Forbidden</h1>Rejected request from RFC1918 IP to public server address| p/OpenWrt admin httpd/ i/rejected RFC1918 address/
 match http m|^HTTP/1\.1 302 Object Moved\r\nLocation: https://.*\r\nContent-Type: text/html\r\nCache-Control: private\r\nConnection: close\r\n\r\n<head><body> This object may be found <a HREF="https://[^"]*">here</a> </body>| p/Citrix NetScaler https redirect/ d/load balancer/
@@ -10216,7 +10238,6 @@ match http m|^HTTP/1\.1 200 OK\r\nServer: Plack::Handler::Starlet\r\nSet-Cookie:
 match http m|^HTTP/1\.0 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nX-Content-Type-Options: nosniff\r\nDate: .*\r\nContent-Length: 19\r\n\r\n404 page not found\n| p|Golang net/http server| i/Go-IPFS json-rpc or InfluxDB API/ cpe:/a:golang:go/ cpe:/a:influxdata:influxdb/ cpe:/a:protocol_labs:go-ipfs/
 match http m=^HTTP/1\.0 200 OK\r.*\nServer: WildFly/(\d+)\r.*\nLiferay-Portal: Liferay (Community|Enterprise) Edition Portal ([\d.]+) (?:[A-Z]E )?([A-Z]{1,2}\d+)=s p/Liferay Portal $2 Edition/ v/$3 $4/ i/JBoss WildFly Application Server $1/ cpe:/a:liferay:liferay_portal:$3:$4:$2/ cpe:/a:redhat:jboss_wildfly_application_server:$1/
 # Samsung SL-C430W
-match http m|^HTTP/1\.0 200 OK\r\nConnection: close\r\nContent-Type: text/html\r\nContent-Length: \d+\r\nCache-Control: max-age=0, no-store, no-cache\r\n\r\n<html>\r\n<head>\r\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n<link rel="shortcut icon" href="/sws/images/fav\.ico" type="image/x-icon" />| p/Samsung SyncThru Web Service/ d/printer/
 match http m|^HTTP/1\.1 200 OK\r\nContent-Type:text/html\r\nExpires: Thu, 1 Jan 1998 00:00:00 GMT\r\nPragma: no-cache\r\nServer: LPC Http Server/V1\.0\r\n.*<TITLE>KONICA MINOLTA Page Scope Web Connection for (\d+)</TITLE>|s p/Konica Minolta $1 printer http admin/ d/printer/ cpe:/h:konicaminolta:$1/a
 match http m|^HTTP/1\.1 200 OK\r\nConnection: close\r\nContent-Type: text/html\r\nCache-Control:no-cache\r\nPragma:no-cache\r\nExpires:[smtwf].*\r\n\r\n<!DOCTYPE html>\n<script>\nvar g_Lan=\d+,g_level=\d+,g_year=\d+,g_title='([^']+)';| p/TP-LINK $1 switch http admin/ d/switch/ cpe:/h:tp-link:$1/a
 match http m|^HTTP/1\.1 401 Unauthorized\r\nConnection: close\r\nContent-Type: text/html\r\nCache-Control:no-cache\r\nPragma:no-cache\r\nExpires:[smtwf].*\r\n\r\n<script>\nvar logonInfo = new Array\(\n\d+,\n0,0\);\nvar g_Lan = \d+;\nvar g_year=\d\d\d\d;| p/TP-LINK switch http admin/ d/switch/
@@ -10473,6 +10494,8 @@ match http m|^HTTP/1\.0 401 Access Denied\r\n(?:[^\r\n]+\r\n)*?Set-Cookie: cprel
 match http m|^HTTP/1\.0 401 Access Denied\r\n(?:[^\r\n]+\r\n)*?Set-Cookie: webmailrelogin=| p/cPanel Webmail httpd/ o/Unix/
 match http m|^HTTP/1\.0 401 Access Denied\r\n(?:[^\r\n]+\r\n)*?Set-Cookie: whostmgrrelogin=| p/cPanel Web Host Manager httpd/ o/Unix/
 match http m|^HTTP/1\.1 403 Forbidden\r\nContent-Type: text/html; charset=gbk\r\nContent-Length: 106\r\nConnection: close\r\n\r\n<html><head><title>403 Forbidden</title></head><body><center><h1>403 Forbidden</h1></center></body></html>| p/TP-Link ADSL+ modem httpd/ d/broadband router/
+match http m|^HTTP/1\.1 200 OK\r\nCONNECTION: close\r\nDate: .*\r\nLast-Modified: .*\r\nEtag: "\d+:[\da-f]+"\r\nCONTENT-LENGTH: \d+\r\nCONTENT-TYPE: text/html\r\n\r\n<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1\.0 Strict//EN" "http://www\.w3\.org/TR/xhtml1/DTD/xhtml1-strict\.dtd"> <html> <head> <title>Intelbras</title>| p/Intelbras webcam httpd/ d/webcam/
+match http m|^HTTP/1\.1 401 Unauthorized\r\nContent-Length: 0\r\nWWW-Authenticate: Digest qop="auth", realm="IP Webcam", nonce="\d+"\r\n\r\n| p/IP Webcam httpd/ o/Android/ cpe:/a:pavel_khlebovich:ip_webcam/
 
 #(insert http)
 
@@ -11157,7 +11180,7 @@ match ipp m|^HTTP/1\.1 301 Moved Permanently\r\nServer: Virata-EmWeb/R([\w_]+)\r
 match ipp m|^HTTP/1\.0 \d\d\d .*\r\nContent-Type: text/html\r\n\r\n<HTML><HEAD><META HTTP-EQUIV=\"Content-type\" CONTENT=\"text/html; charset=iso-8859-1\">\r\n<TITLE>Dell Laser Printer 1700n</TITLE>| p/Dell Laser Printer 1700n ippd/ d/printer/ cpe:/h:dell:1700n/
 match ipp m|^HTTP/1\.0 \d\d\d .*<TITLE>Common UNIX Printing System</TITLE>.*HREF=\"http://www\.easysw\.com\" ALT=\"Easy Software Products Home Page\">\n|s p/Easy Software Products CUPS/
 match ipp m|^<HEAD><TITLE>Not Found</TITLE></HEAD><BODY><H1><B>Not Found</B></H1><P>The requested URL \"\"was not found on this server\.</BODY>\r\n| p/Epson 980N Printer/ d/printer/ cpe:/h:epson:980n/a
-match ipp m|^HTTP/1\.0 400 Bad Request\r\nConnection: close\r\nContent-Type: text/html\r\n\r\nContent-Length: \d+\r\nCache-Control: no-cache\r\n\r\n<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3\.2//EN\">\n<HTML>\n<HEAD>\n<TITLE>Invalid Request</TITLE>\n</HEAD>\n\n<BODY BGCOLOR=\"#FFFFFF\" TEXT=\"#000000\">\n<CENTER>\n<FONT SIZE=\"\+2\" COLOR=\"#FFFFFF\" ALIGN=\"Center\">\n</FONT>\n<B>Invalid Request\. Some Error</B>\n</BODY>\n\n</HTML>\n\n| p/Xerox Phaser 3500/ d/printer/
+match ipp m|^HTTP/1\.0 400 Bad Request\r\nConnection: close\r\nContent-Type: text/html\r\n(?:; charset=utf-8)?\r\nContent-Length: \d+\r\nCache-Control: (?:max-age=0, no-store, )?no-cache\r\n\r\n<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3\.2//EN">\n<HTML>\n<HEAD>\n<TITLE>Invalid Request</TITLE>\n</HEAD>\n\n<BODY BGCOLOR="#FFFFFF" TEXT="#000000">\n<CENTER>\n<FONT SIZE="\+2" COLOR="#FFFFFF" ALIGN="Center">\n</FONT>\n<B>Invalid Request\. Some Error</B>\n</BODY>\n\n</HTML>\n\n| p/Xerox or Samsung ipp/ d/printer/
 match ipp m|^HTTP/1\.0 404 Not found\r\n\r\n404 Not found$| p/Xerox WorkCentre IPP/ d/printer/
 match ipp m|^HTTP/1\.0 404 Not Found\r\nDate: .*\r\nContent-Language: C\r\nUpgrade: TLS/1\.0,HTTP/1\.1\r\nConnection: close\r\nContent-Type: text/html\r\nContent-Length: 138\r\n\r\n<HTML><HEAD><TITLE>404 Not Found</TITLE></HEAD><BODY><H1>Not Found</H1>The requested resource was not found on this server\.</BODY></HTML>\n| p/Thecus N5200 IPP/ d/storage-misc/ cpe:/h:thecus:n5200_nas_server/
 match ipp m|^HTTP/1\.1 200 OK\r\nPragma: no-cache\r\nConnection: close\r\nContent-Type: text/html\r\n\r\n<HTML><HEAD><META HTTP-EQUIV=\"REFRESH\" CONTENT=\"0; URL=http://[\d.]+/\"></HEAD><BODY><P>For more printserver info please open the <A HREF=\"http://[\d.]+/\">[\d.]+</A> home page</BODY></HTML>$| p/Kyocera Mita KM-1530 IPP/ d/printer/ cpe:/h:kyocera:mita_km-1530/
@@ -11782,6 +11805,9 @@ match honeypot m|^\r\nHTTP/1\.1 404 Not Found\r\nConnection: close\r\nContent-Ty
 # Maybe too specific?
 match ilo-vm m|^#\0\x04\0$| p/HP Integrated Lights-Out Virtual Media/ cpe:/h:hp:integrated_lights-out/
 
+# curl -k -H "X-Iota-API-Version: 1" -d '{"command":"getNodeInfo"}'
+match iota-api m|^HTTP/1\.0 400 Bad Request\r\nConnection: close\r\nAccess-Control-Allow-Origin: \*\r\nKeep-Alive: timeout=500, max=100\r\nContent-Type: application/json\r\nContent-Length: 44\r\nDate: .*\r\n\r\n\{"error":"Invalid API Version","duration":0\}| p/IOTA Node API/
+
 match remoting m|^\.NET\x01\0\x02\0\0\0\0\0\0\0\x02\0\x03\x01\0\x03\0\x01\x01..\0\0Server encountered an internal error\. To get more info turn on customErrors in the server's config file\.\x05\0\0\0\0|s p/MS .NET Remoting services/ cpe:/a:microsoft:.net_framework/
 match remoting m|^\.NET\x01\0\x02\0\0\0\0\0\0\0\x02\0\x03\x01\0\x03\0\x01\x01..\0\0System\.Runtime\.Remoting\.RemotingException: Tcp channel protocol violation: expecting preamble\.\r\n|s p/MS .NET Remoting services/ cpe:/a:microsoft:.net_framework/
 
@@ -11853,6 +11879,8 @@ softmatch http m|^HTTP/1\.[01] (?!400)\d\d\d.*\r\nDate: .*\r\nServer: Apache ([^
 
 match http m|^HTTP/1\.1 \d\d\d \w+\r\ncontent-type: application/json\r\ncontent-length: \d+\r\n\r\n{\n  \"ok\" : \w+,\n  \"status\" : \d+,\n  \"name\" : \"[^\"]+\",\n  \"cluster_name\" : \"([^\"]+)\",\n  \"version\" : {\n    \"number\" : \"([\d.]+)\",\n    \"build_hash\" : \"[^\"]+\",\n    \"build_timestamp\" : \"[^\"]+\",\n    \"build_snapshot\" : \w+,\n    \"lucene_version\" : \"([\d.]+)\"\n  }\n}\n$|s p/Crate.io CrateDB/ v/$2/ i/Cluster name: $1, Lucene version: $3/
 
+
+match upnp m|^HTTP/1\.[01] 200 OK\r\n(?:[^\r\n]+\r\n)*?Server: FreeRTOS/([\d\.]+), UPnP/([\d\.]+), IpBridge/([\d\.]+)\r\n|s p/FreeRTOS UPnP media server/ v/$1/ i/FreeRTOS $1; UPnP $2; IpBridge $3/ o/FreeRTOS/ cpe:/o:amazon:freertos:$1/
 ##############################NEXT PROBE##############################
 Probe TCP HTTPOptions q|OPTIONS / HTTP/1.0\r\n\r\n|
 rarity 4
@@ -13226,7 +13254,7 @@ match irc m|^:([-\w_.]+) 451 HELP :You have not registered\r\n| p/ircu ircd/ h/$
 match irc m|^:([-\w_.]+) 451  HELP :Register first\.\r\n| p/ircu ircd/ h/$1/ cpe:/a:undernet:ircu/
 match irc m|^NOTICE AUTH :\*\*\* Checking Ident\r\n:([-\w_.]+) 451 \*  :Register first\.\r\n| p/ircu ircd/ h/$1/ cpe:/a:undernet:ircu/
 match irc m|^:([\w._-]+) 451 \* :Connection not registered\r\n| p/ngircd/ h/$1/ cpe:/a:barton:ngircd/
-
+match irc m|^:([\w._-]+) 461 HELP\r\n| p/matterircd/ h/$1/ cpe:/a:42wim:matterircd/
 match irc m|^:([-\w_.]+) 290  :\.-----------------=#\[ euIRCd HelpSystem \]#=----------------\.\n| p/euIRCd/ h/$1/
 
 match jabber m|^</stream:stream>$| p/Zimbra 6 jabberd/
@@ -13553,6 +13581,7 @@ match http-proxy m|^HTTP/1\.1 400\r\nConnection: close\r\n\r\nBad request syntax
 match http-proxy m|^HTTP/1\.0 414 Request URI too long\r\nContent-Type: text/html\r\nContent-Length: 23\r\nExpires: now\r\nPragma: no-cache\r\nCache-control: no-cache,no-store\r\n\r\nRequest URI is too long| p/Pound http reverse proxy/ cpe:/a:apsis:pound/
 
 match ilo-vm m|^\"\0\x03\0$| p/HP Integrated Lights-Out Virtual Media/ cpe:/h:hp:integrated_lights-out/
+match iperf3 m|^\t$|
 
 match login m|^\0\r\nlogin: \^W\^@\^@\^@\^| p/VxWorks logind/ o/VxWorks/ cpe:/o:windriver:vxworks/a
 
@@ -13669,6 +13698,7 @@ match ssl m|^\x16\x03[\0-\x04]..\x02\0\0.\x03[\0-\x03]|s
 # SSLv3 - TLSv1.2 Alert
 match ssl m|^\x15\x03[\0-\x04]\0\x02[\x01\x02].$|s
 
+match iperf3 m|^\t$|
 match misys-loaniq m|^\0\0\0#sJ\0\0\0\0\0\0#\0\0\0Invalid time string: \n\0\0\0\0#sJ\0\0\0\0\0\0#\0\0\0Invalid time string: \n\0\0\0\0#sJ\0\0\0\0\0\0#\0\0\0Invalid time string: \n\0\0\0\0#sJ\0\0\0\0\0\0#\0\0\0Invalid time string: \n\0\0\0..sJ\0\0\0\0\0\0..\0\0\n Misys Loan IQ ([\w._-]+) \(Server\)\n Build  : for Windows using Oracle \(built: (\w\w\w \d\d \d\d\d\d_\d\d:\d\d:\d\d) \([\w._-]+@[\w._-]+-C:\\[^)]*\)\)\n Patch Info : \[(?:[\w._-]+(?:, )?)+\]\n\n Environment name: \w+ Prime - \w+\n    ADMCP Primary node: \w+;  Secondary node: \w+; Portdaem Port = (\d+)\n\n Current time: [^\n]*\n On: \w+  \([\w._-]+\)\n OS: (Microsoft Windows[^\n]*)\n MEMORY  \(Tot/Free\) : ([\d.]+) / ([\d.]+) MB\n\n Last Logger Start : [^\n]*\n L$| p/Misys Loan IQ/ v/$1/ i|built $2; portdaem port $3; free memory $6/$5 MB; $4| o/Windows/ cpe:/o:microsoft:windows/a
 match misys-loaniq m|^\0\0@\0tJ\0\0\0\0\0\0\0@\0\0\n Misys Loan IQ ([\w._-]+) \(Server\)\n Build  : for Windows using Oracle \(built: (\w\w\w \d\d \d\d\d\d_\d\d:\d\d:\d\d) \([\w._-]+@[\w._-]+-C:\\[^)]*\)\)\n Patch Info : \[\]\n\n Environment name: \w+ \w+\n    ADMCP Primary node: \w+;  Secondary node: \w+; Portdaem Port = (\d+)\n\n Current time: [^\n]*\n On: \w+  \([\w._-]+\)\n OS: (Microsoft Windows[^\n]*)\n MEMORY  \(Tot/Free\) : ([\d.]+) / ([\d.]+) MB\n| p/Misys Loan IQ/ v/$1/ i|built $2; portdaem port $3; free memory $6/$5 MB; $4| o/Windows/ cpe:/o:microsoft:windows/a
 
@@ -13745,6 +13775,7 @@ match honeywell-hscodbcn m|^\0\0\0\x02\0\x03$| p/Honeywell hscodbcn power manage
 
 match http m|^HTTP/1\.0 503 OK\r\nContent-Type: text/html\r\n\r\nBusy$| p/D-Link DI-524 WAP http config/ d/WAP/ cpe:/h:dlink:di-524/
 match http m|^HTTP/1\.1 414 Request URI Too Long\r\nServer: Catwalk\r\nDate: .*\r\nContent-Length: 0\r\nConnection: close\r\n\r\n$| p/Catwalk httpd/ i/Canon imageRUNNER printer/ d/printer/
+match iperf3 m|^\t$|
 
 # Need more examples of this one -Doug
 match kerberos-sec m|^.*Internal KDC error, contact administrator|s p/Shishi kerberos-sec/
@@ -15024,6 +15055,8 @@ match snmp m|^0.*\x02\x01\0\x04\x06public\xa2|s p/SNMPv1 server/ i/public/
 
 match echo m|^0\x82\0/\x02\x01\0\x04\x06public\xa0\x82\0\x20\x02\x04\x4c\x33\xa7\x56\x02\x01\0\x02\x01\0\x30\x82\0\x10\x30\x82\0\x0c\x06\x08\x2b\x06\x01\x02\x01\x01\x05\0\x05\0$|
 
+
+match snmp m|FreeRTOS| p/FreeRTOS snmpd/ o/FreeRTOS/ cpe:/o:amazon:freertos/
 ##############################NEXT PROBE##############################
 Probe UDP SNMPv3GetRequest q|\x30\x3a\x02\x01\x03\x30\x0f\x02\x02\x4a\x69\x02\x03\0\xff\xe3\x04\x01\x04\x02\x01\x03\x04\x10\x30\x0e\x04\0\x02\x01\0\x02\x01\0\x04\0\x04\0\x04\0\x30\x12\x04\0\x04\0\xa0\x0c\x02\x02\x37\xf0\x02\x01\0\x02\x01\0\x30\0|
 rarity 4
@@ -16316,7 +16349,10 @@ sslports 2482
 
 # Filemaker Pro Advanced 11
 match giop m|^GIOP\x01\0\x01\x01@\0\0\0\0\0\0\0\x01\0\0\0\x02\0\0\0'\0\0\0IDL:omg\.org/CORBA/OBJECT_NOT_EXIST:1\.0\0| p/omg.org CORBA naming service/
+# Mitel networks IIOP
+match giop m|^GIOP\x01\0\0\x01\0\0\0@\0\0\0\0\0\0\0\x01\0\0\0\x02\0\0\0'IDL:omg\.org/CORBA/OBJECT_NOT_EXIST:1\.0\0\0OM\0\x02\0\0\0\x01| p/omg.org CORBA naming service/
 softmatch giop m|^GIOP\x01\x00\x01\x01........\x01\x00\x00\x00|
+softmatch giop m|^GIOP.*IDL:omg\.org|s
 
 match iscsi m|^#\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0\0\0\0\0| p/Synology DSM iSCSI/
 
@@ -16336,6 +16372,8 @@ Probe UDP OpenVPN q|8d\xc1x\x01\xb8\x9b\xcb\x8f\0\0\0\0\0|
 ports 1194,443,500
 rarity 9
 match openvpn m|^@........\x01\0\0\0\0d\xc1x\x01\xb8\x9b\xcb\x8f\0\0\0\0|s p/OpenVPN/
+# INVALID-MAJOR-VERSION
+softmatch isakmp m|^................\x0b\x10\x05\0\0\0\0\0\0\0\0\(\0\0\0\x0c\0\0\0\x01\x01\0\0\x05|
 
 ##############################NEXT PROBE##############################
 # Phoenix Contact PCWorx
@@ -16585,3 +16623,391 @@ ports 9761
 # 06 - ACK (15 is NACK)
 match insteon-plm m|^\x02\x60...(.).\x9b\x06$| p/Insteon SmartLinc PLM/ i/device type: $I(1,">")/
 match insteon-plm m|^\x02\x60...(.).[\x9c\x9d]\x06$| p/Insteon Hub PLM/ i/device type: $I(1,">")/
+
+
+##############################NEXT PROBE##############################
+# Modbus
+Probe TCP Modbus2 q|\x00\x00\x00\x00\x00\x05\x01\x2b\x0e\x01\x00|
+
+rarity 9
+ports 502
+
+match Modbus m|HMS\x01\x1dAnybus-CC Modbus-TCP.*\x02\x07(\d+\.\d+\.\d+)$| p/HMS Anybus-CC/ v/$1/ d/ICS/
+
+match Modbus m|Fastwel Co. Ltd.\x01%Fastwel CPM713 MODBUS TCP PLC Runtime\x02\n(\d+\.\d+\.\d+)$| p/Fastwel CPM713/ v/$1/ d/ICS/
+
+match Modbus m|Schneider Electric SAS\x01\x0a(.*)\x02\x04(.*)| p/Schneider Electric SAS/ v/$1 $2/ d/ICS/
+
+##############################NEXT PROBE##############################
+# Modbus
+Probe TCP Modbus q|\x02\x99\x00\x00\x00\x06\x01\x01\x00\x00\x00\x0a|
+
+rarity 9
+ports 502
+
+match Modbus m|\x02\x99\x00\x00\x00\x05\x01\x01\x02\x00\x00| d/ICS/
+
+##############################NEXT PROBE##############################
+# Guardian AST Automatic Tank Gauge
+Probe TCP atg q|\x01\x49\x32\x30\x31\x30\x30\x0a|
+
+rarity 9
+ports 10001
+
+match atg m|^\x01| p/Guardian AST Automatic Tank Gauge/ d/ICS/
+match atg m|IN-TANK| p/Guardian AST Automatic Tank Gauge/ d/ICS/
+match atg m|I20100| p/Guardian AST Automatic Tank Gauge/ d/ICS/
+
+##############################NEXT PROBE##############################
+# codesys
+Probe TCP codesys q|\xbb\xbb\x01\x00\x00\x00\x01|
+
+rarity 9
+ports 2455
+
+match CoDeSyS m|^\xbb\xbb\xce| p/3S-Smart Software Solutions/ d/ICS/
+match CoDeSyS m|3S-Smart| p/3S-Smart Software Solutions/ d/ICS/
+
+##############################NEXT PROBE##############################
+# codesys
+Probe TCP codesys2 q|\xbb\xbb\x01\x00\x01\x00\x01|
+
+rarity 9
+ports 2455
+
+match CoDeSyS m|^\xbb\xbb| p/3S-Smart Software Solutions/ d/ICS/
+
+##############################NEXT PROBE##############################
+# Red Lion Controls 
+Probe TCP redlioncontrols q|\x00\x04\x01\x2a\x1a\x00|
+
+rarity 9
+ports 789
+
+match redlion-crimson3 m|\0.*\x01\*\x03\0(.*)\0| p/Red Lion Controls/ v/$1/ d/ICS/
+match redlion-crimson3 m|\0\n\x01\*\x03\0(.*)\0| p/Red Lion Controls/ v/$1/ d/ICS/
+match redlion-crimson3 m|\0\t\x01\*\x03\0(.*)\0| p/Red Lion Controls/ v/$1/ d/ICS/
+
+##############################NEXT PROBE##############################
+# Red Lion Controls 
+Probe TCP redlioncontrols2 q|\x00\x04\x01\x2b\x1b\x00|
+
+rarity 9
+ports 789
+
+match redlion-crimson3 m|\0\x16\x01\+\x03\0Red Lion Controls\0| p/Red Lion Controls/  d/ICS/
+
+##############################NEXT PROBE##############################
+# CSPV4 
+Probe TCP cspv4 q|\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+
+rarity 9
+ports 2222
+
+match plc5 m|^\x02\x01\x00\x00| p/CSPV4/  d/ICS/
+match plc5 m|^\x02\x45\x52| p/CSPV4/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# DNP3 
+Probe TCP dnp3 q|\x05\x64\x05\xC9\x00\x00\x00\x00\x36\x4C\x05\x64\x05\xc9\x01\x00\x00\x00\xde\x8e\x05\x64\x05\xC9\x64\x00\x00\x00\x44\x95|
+
+rarity 9
+ports 20000
+
+match dnp3 m|^\x05\x64| p/dnp3devices/  d/ICS/
+
+##############################NEXT PROBE##############################
+# ethernetip 
+Probe TCP ethernetip q|\x63\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xc1\xde\xbe\xd1\x00\x00\x00\x00|
+
+rarity 9
+ports 44818
+
+match ethernetip m|^\x63\x00[\x00-\xff]+[\x18\x1b\x0b\x0f]([\.\/\w\-\s]+)\x03$| v/Rockwell Automation Allen-Bradley $1/  d/ICS/
+match ethernetip m|^\x63\x00[\x00-\xff]+[\x13\x14\x15]([\.\/\w\-\s]+)\x00$| v/Rockwell Automation Allen-Bradley $1/  d/ICS/
+
+match ethernetip m|^\x63\x00[\x00-\xff]+\x0e(Watlow([\.\/\w\-\s]+))\xff$| v/WATLOW $2/  d/ICS/
+
+match ethernetip m|^\x63\x00[\x00-\xff]+[\x01\x05\x0a]([\.\/\w\-\s]+)\x03$| v/Omron Corporation $1/  d/ICS/
+
+match ethernetip m|^\x63\x00[\x00-\xff]+\x0d([\.\/\w\-\s]+)\x03$| v/Schneider Automation Inc. $1/  d/ICS/
+
+match ethernetip m|^\x63\x00[\x00-\xff]+\x0a([\.\/\w\-\s]+)\xff$| v/Banner Engineering Corp. $1/  d/ICS/
+
+match ethernetip m|^\x63\x00[\x00-\xff]+\x0b([\.\/\w\-\s]+)\xff$| v/OPTO-22 $1/  d/ICS/
+
+match ethernetip m|^head|  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# IEC 60870-5-104
+Probe TCP iec-60870-5-104 q|\x68\x04\x07\x00\x00\x00|
+
+rarity 9
+ports 2404
+
+match iec-60870-5-104 m|^\x68\x04\x0b\x00\x00\x00$| v/IEC 60870-5-104/  d/ICS/
+
+##############################NEXT PROBE##############################
+# MELSEC-Q Series PLC CPUINFO
+Probe TCP MelsoftTCP q|\x57\x00\x00\x00\x00\x11\x11\x07\x00\x00\xff\xff\x03\x00\x00\xfe\x03\x00\x00\x14\x00\x1c\x08\x0a\x08\x00\x00\x00\x00\x00\x00\x00\x04\x01\x01\x01\x00\x00\x00\x00\x01|
+
+rarity 9
+ports 5007
+
+match MelsoftTCP m|^\xd7\x00[\x00-\xff]+RCPU| p/Mitsubishi Q PLC/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# MELSEC-Q Series PLC CPUINFO
+Probe UDP MelsoftUDP q|\x57\x00\x00\x00\x00\x11\x11\x07\x00\x00\xff\xff\x03\x00\x00\xfe\x03\x00\x00\x14\x00\x1c\x08\x0a\x08\x00\x00\x00\x00\x00\x00\x00\x04\x01\x01\x01\x00\x00\x00\x00\x01|
+
+rarity 9
+ports 5006
+
+match MelsoftUDP m|^\xd7\x00[\x00-\xff]+RCPU| p/Mitsubishi Q PLC/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# BACNet -- Building Automation and Control Networks
+Probe UDP BACNet q|\x81\x0a\x00\x11\x01\x04\x00\x05\x01\x0c\x0c\x02\x3F\xFF\xFF\x19\x79|
+
+rarity 9
+ports 47808
+
+match BACNet m|^\x81\x0a[\x00-\xff]+\x00([\.\/\w\-\s]+)\x3f$| p/$1/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# Moxa Nport Devices
+Probe UDP MoxaNport q|\x01\x00\x00\x08\x00\x00\x00\x00|
+
+rarity 9
+ports 4800
+
+match MoxaNport m|^\x81\x00\x00\x18\x00\x00| p/Moxa Nport Devices/  d/ICS/
+
+##############################NEXT PROBE##############################
+# OMRON FINS
+Probe TCP OMRONFINS q|\x46\x49\x4e\x53\x00\x00\x00\x15\x00\x00\x00\x02\x00\x00\x00\x00\x80\x00\x02\x00\x7a\x00\x00\x00\xef\x05\x05\x01\x00|
+
+rarity 9
+ports 9600
+
+match OMRONFINS m|^FINS\x00\x00[\x00-\xff]+\x00([\.\/\w\-\s]+)\x20+([\d\.]+)\x00| p/OMRON FINS/ v/$1 $2/  d/ICS/
+match OMRONFINS m|^FINS\x00\x00| p/OMRON FINS/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# OMRON FINS
+Probe UDP OMRONFINS q|\x80\x00\x02\x00\x00\x00\x00\x63\x00\xef\x05\x01\x00|
+
+rarity 9
+ports 9600
+
+match OMRONFINS m|^\xc0\x00\x02[\x00-\xff]+\x00([\.\/\w\-]+)[\x20\x00]+([\d\.]+)\x00| p/OMRON FINS/ v/$1 $2/  d/ICS/
+
+
+##############################NEXT PROBE##############################
+# Phoenix Contact PCWorx
+Probe TCP pcworx q|\x01\x06\x00\x0e\x00\x02\x00\x00\x00\x00\x00\x4c\x04\x00|
+
+rarity 9
+ports 1962
+
+match pcworx m|^\x81\x06\x00\x18[\x00-\xff]+\x04\x00$| p/Phoenix Contact PCWorx/ d/ICS/
+
+##############################NEXT PROBE##############################
+# ProConOs protocol
+Probe TCP proconos q|\xcc\x01\x00\x0b\x40\x02\x00\x00\x47\xee|
+
+rarity 9
+ports 20547
+
+match proconos m|^\xcc[\x00-\xff]+ProConOS (V[\w\.]+)| p/ProConOS $1/ d/ICS/
+
+
+
+##############################NEXT PROBE##############################
+# zheng quan zi xun
+Probe TCP ZQZX q|\x01\x00\x00\x55\x00\x00\x02\x00\x02\x00\x4d\x1f|
+rarity 9
+#ports 7711
+ports 80-65534
+match ZQZX m|^\xb1\xcb\x74\x00\x01\x00\x00\x55\x00\x00\x4d\x1f\x0b\x00\x0b\x00(.*)\x00| p/$1/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ q|\x0c\x04\x18\x69\x00\x01\x2a\x00\x2a\x00\xc5\x02\x69\x6e\x66\x6f\x68\x61\x72\x62\x6f\x72\x5f\x73\x70\x65\x63\x2e\x63\x66\x67\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 7709
+ports 80-65534
+match ZQHQ m|\x34\x32\x39\x62\x62\x34\x64\x30\x30\x63\x65\x32\x36\x32\x31\x39\x63\x38\x35\x39\x33\x62\x61\x61\x61\x32\x30\x36\x64\x31\x35\x62| p/TDX/
+
+##############################NEXT PROBE##############################
+# zheng quan kuo zhan hang qing
+Probe TCP ZQKZHQ q|\x01\x60\x02\x28\x00\x01\x02\x00\x02\x00\xf0\x23|
+rarity 9
+#ports 7721,7727
+ports 80-65534
+match ZQKZHQ m|^\xb1\xcb\x74\x00(.*)\x00\x00\xf0\x23\x1f\x00\x1f\x00(.*)\x00| p/$2/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ2 q|\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x37\x33\x09\x00\x16\x00\x00\x00\x00\x12\x00\x01\x00\x00\x00\x00\x20\x00\x00\x00\x00\x5d\x00\x00\x00\x43\x2d\x4c\x61\x6e\x67\x75\x61\x67\x65\x3d\x32\x30\x35\x32\x0d\x0a\x43\x2d\x56\x65\x72\x73\x69\x6f\x6e\x3d\x45\x30\x32\x37\x2e\x39\x35\x2e\x36\x31\x2e\x30\x30\x38\x33\x0d\x0a\x43\x2d\x43\x6f\x6e\x66\x69\x67\x3d\xcd\xac\xbb\xa8\xcb\xb3\xb7\xbd\xb0\xb8\x0d\x0a\x43\x2d\x4d\x6f\x64\x75\x6c\x65\x73\x3d\x4d\x5a\x51\x0d\x0a\x70\x61\x67\x65\x69\x64\x3d\x34\x33\x34\x31\x0d\x0a|
+rarity 9
+#ports 8601,9601
+ports 80-65534
+match ZQHQ m|\x0d\x0a\x73\x69\x67\x6e\x68\x6f\x73\x74\x3d(.*)\x0d\x0a| p/THS-$1/
+match ZQHQ m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x30\x61\x09\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$| p/THS/
+match ZQHQ m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x31\x36\x09\x01\xce\xde\xb7\xa8\xd1\xe9\xd6\xa4\xd3\xc3\xbb\xa7\xc9\xed\xb7\xdd\xa1\xa3\x00\x00\x00$| p/THS/
+match ZQHQ m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x30\x34\x09\x01\x00\x00\x00$| p/THS/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ3 q|\x0b\x07\x00\x00\x00\x00\x1e\x00\x1e\x00\xac\x26\x00\x64\xd2\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xd0\x22\xbe\xf7\x9c\x55\x25\x00\x14\x03\x00\x00|
+rarity 9
+#ports 7615,7710
+ports 80-65534
+match ZQHQ m|^\x0b(.*)\x5a$| p/TDX-mobile/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ4 q|\xdd\x07\x42\x00\x00\x00\x1d\x4f\x02\x00\x03\x00\x59\x4A\x42\x59\x4A\x42\x00\x00\x00\x00\x00\x00\xe7\xfc\x5d\xcc\x52\xcb\x61\xd3\x76\xe1\xcf\x05\x40\xc2\x73\x44\x01\xd6\x4f\xf3\x0e\xf9\x1c\xc9\x30\x99\xa7\x1b\xd5\x9b\xe3\xec\x7a\xc1\x21\x02\x50\x4e\xf4\xa1\x41\x05\x4b\x79\xbd\x5a\x4c\x20\xc8\x6c\x0f|
+rarity 9
+#ports 7778,7788
+ports 80-65534
+match ZQHQ m|^\xdd\x07(.*)\x00\x03\x00\x59\x4a\x42| p/YJB-mobile/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ5 q|\x23\x31\x6d\x00\x00\x00\x03\x00\x00\x00\x00\x00\x01\x50\x30\x01\x00\x23\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x57\x04\x08\x32\x30\x30\x34\x30\x32\x00\x00\x00\x00\x00\x65\x70\x6f\x6c\x65\x73\x74\x61\x72\x20\x76\x39\x2e\x33\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 31631
+ports 80-65534
+match ZQHQ m|\x00\x45\x73\x48\x71\x48\x6b| p/epolestar/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ6 q|\x2b\x31\xd3\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x00\x04\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x30\xaf\x00\x00\x00\x01\x00\x00\x00\x00\x00\x57\x45\x73\x48\x71\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x36\x36\x36\x34\x35\x36\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x65\x70\x6f\x6c\x65\x73\x74\x61\x72\x20\x76\x39\x2e\x33\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 33556
+ports 80-65534
+match ZQHQ m|\x45\x73\x48\x71\x00| p/epolestar/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ7 q|\x23\x34\x39\x00\x00\x00\x67\x30\x0f\x66\x80\x92\xa8\xc5\x45\xa1\x64\x98\xd7\xaf\xa2\x48\x81\x8f\x48\x83\x09\x2a\xfd\xe8\x32\x83\xcb\xfe\x40\xdb\xd1\x08\xe0\xfa\xa5\x70\x5d\xfe\x97\xca\x69\x6c\x80\x5f\xb7\xce\xd2\x11\xa2\x63\x7b\xae\x9a\xff\x96\xf2\x61|
+rarity 9
+#ports 17327
+ports 80-65534
+match ZQHQ m|\x23\x34\x64(.*)\x4e\x32\x61| p/epolestar/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ8 q|\x2b\x31\x2f\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x30\x0b\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 33558
+ports 80-65534
+match ZQHQ m|^\x2b\x32(.*)\x35\x32| p/epolestar/
+
+
+
+##############################NEXT PROBE##############################
+# zheng quan jiao yi
+Probe TCP ZQJY2 q|\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x38\x30\x00\x00\x0c\x00\x79\x6f\x75\x61\x72\x65\x61\x64\x6f\x67\x0d\x0a\x0c\x00\x79\x6f\x75\x61\x72\x65\x61\x64\x6f\x67\x0d\x0a\x02\x00\x23\x23\x08\x00\x32\x30\x31\x30\x30\x31\x32\x30\x1f\x00\x4c\x61\x73\x74\x55\x70\x64\x61\x74\x65\x3d\x32\x30\x31\x30\x30\x31\x32\x30\x26\x4c\x69\x6e\x6b\x4d\x6f\x64\x65\x3d\x31\x26\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 995,8002
+ports 80-65534
+match ZQJY m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30(.*)\x53\x65\x72\x76\x65\x72\x53\x70\x65\x65\x64\x54\x65\x73\x74| p/THS/
+
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ9 q|\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x34\x37\x00\x01\x00\x00\x4e\x45\x57\x43\x4c\x49\x45\x4e\x54\x00\x00\x00\x00\x00\x00\x00\xb8\x0b\x00\x00\x01\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x47\x75\x65\x73\x74\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x47\x75\x65\x73\x74\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00|
+rarity 9
+#ports 9100,9101
+ports 80-65534
+match ZQHQ m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30\x30\x30\x61\x30\x00\x01| p/THS/
+match ZQHQ m|^\x26\x00\x00\x00(.*\d+\.\d+\.\d+\.\d+)| p/THS/
+
+
+##############################NEXT PROBE##############################
+# zheng quan shu ju
+Probe TCP ZQSJ q|\x47\x53\x26\x00\x00\x00\x1a\x00\x3d\x68\x00\x01\x00\x00\x0a\x00\x00\x00\x01\x00\x00\x00\x10\x27\x00\x00\x50\x68\x6f\x6e\x65\x4e\x75\x6d\x3d\x3b\x45\x43|
+rarity 9
+#ports 9000,906
+ports 80-65534
+
+match ZQSJ m|^\x47\x53\x26\x00\x00\x00\x1a\x00\x3d\x68\x00\x41\x00\x00\x0a\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x50\x68\x6f\x6e\x65\x4e\x75\x6d\x3d\x3b\x45\x43$| p/GXZQ/
+match ZQYH m|^\x06\x00\x00\x00\x01\x01| p/GXZQ/
+
+
+##############################NEXT PROBE##############################
+# zheng quan jiao yi
+Probe TCP ZQJY3 q|\x0e\x5A\x51\x4A\x59\x00\x02\x00\x02\x00\xb8\x0b\x00\x00|
+rarity 9
+#ports 7708
+ports 80-65534
+match ZQJY m|^\xb1\xcb(.*)\x5a\x51\x4a\x59| p/TDX/
+
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ10 q|\x40\x78\x01\x00\x00\x00\x60\x00\x08\x00\x00\x00\x14\x00\x7a\x78\x7a\x71\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x38\x35\x61\x32\x32\x63\x31\x32\x37\x30\x38\x64\x63\x30\x37\x32\x64\x63\x31\x63\x63\x38\x62\x34\x39\x33\x65\x39\x34\x61\x33\x34\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xbf\x11\x0a\x0b|
+rarity 9
+#ports 10089
+ports 80-65534
+match ZQHQ m|^\x40\x78(.*)\x57\x4d\x43\x31\x35(.*)\x68\x64\x5f\x63\x65\x72\x74\x69\x66\x79| p/HDCF/
+
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ11 q|\xfd\xfd\xfd\xfd00000230\0\x1c\0\0\0\0\0\0\0\x07\0\0\xff\x14\x02\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x10\x02\x10\x02\x05\x04\0\x73\x69\x67\x6e\x61\x70\x70\x3d\x61\x6e\x64\x72\x6f\x69\x64\x0d\x0a\x41\x70\x70\x56\x65\x72\x3d\x47037\x2e08\x2e278\x2e1\x2e32\x0d\x0a\x66\x6f\x72\x3d\x74\x68\x73\x5f\x61\x6d\x5f\x67\x70\x68\x6f\x6e\x65\x5f\x6c\x6f\x67\x69\x6e\x0d\x0a\x73\x6f\x75\x72\x63\x65\x69\x64\x3d902\x0d\x0a\x70\x72\x6f\x67\x69\x64\x3d500\x0d\x0a\x75\x64\x69\x64\x3d110081510369782\x0d\x0a\x46\x43\x53\x75\x70\x3d011111111110001011\x0d\x0a\x53\x57\x3d1080\x0d\x0a\x53\x48\x3d1920\x0d\x0a\x43\x41\x3d4\x0d\x0a\x6e\x65\x74\x3d1\x0d\x0a\x54\x50\x3d\x53\x43\x48\x2d\x49959\x0d\x0a\x53\x56\x4e\x3d28\x64670228\x64\x6632\x625\x640\x6422\x62\x6378\x62\x61\x621\x63\x66480140\x65\x6319\x0d\x0a\x53\x44\x4b\x3d21\x0d\x0a\x53\x44\x4b\x4e\x3d5\x2e0\x2e1\x0d\x0a\x49\x4d\x45\x49\x3d011127460180165\x0d\x0a\x69\x6d\x73\x69\x3d110081510369782\x0d\x0a\x43\x49\x44\x3d902\x0d\x0a\x6d\x61\x63\x41\x3d9\x66\x3a5\x66\x3a\x633\x3a38\x3a90\x3a0\x61\x0d\x0a\x53\x44\x3d1517382000\x0d\x0a\x61\x75\x74\x68\x76\x65\x72\x3d9\x0d\x0a\x44\x65\x76\x69\x63\x65\x49\x44\x3d\x64\x65\x76\x5f368380336\x5f148\x5f9552\x0d\x0a\x61\x63\x63\x6f\x75\x6e\x74\x3d\x6d\x74\x5f435581797\x0d\x0a\x70\x73\x75\x6d\x3d1019092035\x0d\x0a\x75\x73\x65\x72\x69\x64\x3d435581797\x0d\x0a\x4d\x54\x3d\x6d\x74\x5f435581797\x0d\x0a\x4d\x55\x3d435581797\x0d\x0a\x50\x57\x44\x3d29\x621297833\x64\x6644643\x611\x639\x650\x64\x612\x6499570\x0d\x0a\x45\x78\x74\x56\x65\x72\x3d1\x0d\x0a|
+rarity 9
+#ports 9528
+ports 80-65534
+match ZQHQ m|^\xfd\xfd\xfd\xfd\x30\x30\x30\x30(.*)\x75\x6e\x61\x6d\x65\x3d\x6d\x74\x5f(.*)\x26\x70\x61\x73\x73\x77\x64\x3d(.*)\x26\x73\x69\x67\x6e\x76\x61\x6c\x69\x64\x3d(.*)\x3b$| p/THS-mobile/
+
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ12 q|\x23\x09\x00\xa8\xc5\x04\x07\x48\x00\x64\x00\x01\x00\x04\x35\x31\x30\x30\x35\x30|
+rarity 9
+#ports 7799
+ports 80-65534
+match ZQHQ m|^\x23(.*)\x35\x31\x30\x30\x35\x30| p/qianlong/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ13 q|\x23\x04\x00\x00\x00\x71\x69\x61\x6E\x00\x64\x00\x00\x00\x00\x00|
+rarity 9
+#ports 7711
+ports 80-65534
+match ZQHQ m|^\x23(.*)\x71\x69\x61\x6E| p/qianlong/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ14 q|\x00\x00\x00\x1c\x3c\x4b\x43\x58\x50\x3e\x93\x33\x39\xa4\x72\x65\x71\x66\x66\xa5\x31\xad\x31\x33\x35\x3c\x2f\x4b\x43\x58\x50\x3e|
+rarity 9
+#ports 7708
+ports 80-65534
+match ZQHQ m|^\x00(.*)\x3C\x4B\x43\x58\x50\x3E(.*)\x3C\x2F\x4B\x43\x58\x50\x3E| p/cft/
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ15 q|\x00\x00\x00\x10\x78\x54\x70\x42\x00\x01\x00\x00\x5a\x74\x15\x47|
+rarity 9
+#ports 59000
+ports 80-65534
+match ZQHQ m|^\x00(.*)\x78\x54\x70\x42| p/xtpb/
+
+
+##############################NEXT PROBE##############################
+# zheng quan hang qing
+Probe TCP ZQHQ16 q|\x00\x00\x00\x3b\x00\x00\x00\x02\x00\x03\x00\x00\x2f\x00\x00\x00\x02\x66\x75\x6e\x63\x00\x13\x00\x00\x00\x67\x65\x74\x49\x64\x65\x6e\x74\x69\x66\x79\x69\x6e\x67\x43\x6f\x64\x65\x00\x04\x70\x61\x72\x61\x6d\x73\x00\x05\x00\x00\x00\x00\x00|
+rarity 9
+#ports 56000,63500
+ports 80-65534
+match ZQHQ m|^\x00(.*)params(.*)encryption| p/xtpb/

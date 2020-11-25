@@ -68,25 +68,30 @@ def output(msg, level=LogLevel.INFO):
 
     if level > debug: return
 
+    try:
+        msg = str(bytes(str(msg), "utf-8", "ignore"), "utf-8", "ignore")
+    except:
+        pass
+    
     if logger:
         if level == LogLevel.ERROR:
-            logger.error(str(msg))
+            logger.error(msg)
         elif level == LogLevel.WARN:
-            logger.warn(str(msg))
+            logger.warn(msg)
         elif level == LogLevel.INFO:
-            logger.info(str(msg))
+            logger.info(msg)
         else:
-            logger.debug(str(msg))
+            logger.debug(msg)
     else:
         timeStr = datetime.now().strftime('%H:%M:%S.%f')
         if level == LogLevel.ERROR:
-            print('[E][{}] {}'.format(timeStr, str(msg)))
+            print('[E][{}] {}'.format(timeStr, msg))
         elif level == LogLevel.WARN:
-            print('[W][{}] {}'.format(timeStr, str(msg)))
+            print('[W][{}] {}'.format(timeStr, msg))
         elif level == LogLevel.INFO:
-            print('[I][{}] {}'.format(timeStr, str(msg)))
+            print('[I][{}] {}'.format(timeStr, msg))
         else:
-            print('[D][{}] {}'.format(timeStr, str(msg)))
+            print('[D][{}] {}'.format(timeStr, msg))
 
 def index_template(es):
     """
@@ -95,7 +100,7 @@ def index_template(es):
     """
     body = {
         "index_patterns": ".passets-filter",
-        "settings": { "refresh_interval": "5s", "number_of_shards": 1, "auto_expand_replicas": "0-1" },
+        "settings": { "refresh_interval": "1s", "number_of_shards": 1, "auto_expand_replicas": "0-1" },
         "mappings": {
             "properties": {
                 "scroll_id": { "type": "text"}
@@ -196,7 +201,7 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
     # 从节点不主动创建 Scroll，只从 ES 上获取
     if not mode:
         time.sleep(2)
-        output('Fetch new scroll...', LogLevel.DEBUG)
+        output('Fetch new scroll...', LogLevel.INFO)
         scrollId = get_scroll(es)
         return []
 
@@ -224,17 +229,17 @@ def search_by_time(es, index, time_range=15, size=10, mode=0):
     }
     
     try:
-        output('Start new search context...', LogLevel.DEBUG)
+        output('Start new search context...', LogLevel.INFO)
         output(query, LogLevel.DEBUG)
         ret = es.search(index=index, body=query, scroll='3m')
         if '_scroll_id' in ret:
-            output('Use new scroll id', LogLevel.DEBUG)
+            output('Use new scroll id', LogLevel.INFO)
             scrollId = ret['_scroll_id']
         
             # 保存 scroll_id 供其它实例使用
             set_scroll(es, scrollId)
 
-        output('Search {} documents.'.format(len(ret['hits']['hits'])), LogLevel.DEBUG)
+        output('Search {} documents.'.format(len(ret['hits']['hits'])), LogLevel.INFO)
         return ret['hits']['hits']
     except ConnectionError:
         output("ES connect error.", LogLevel.ERROR)
@@ -271,7 +276,7 @@ def batch_update(es, docs, max_retry=3):
         else:
             output(ce, LogLevel.ERROR)
     except:
-        output(traceback.print_exc(), LogLevel.INFO)
+        output(traceback.print_exc(), LogLevel.ERROR)
 
     return ret
 
@@ -299,7 +304,7 @@ def filter_thread(threadId, options):
             threadLock.release()
 
             if not data:
-                output('Thread {}: No new msg, waiting 2s ...'.format(threadId), LogLevel.INFO)
+                output('Thread {}: No new msg, waiting 2s ...'.format(threadId), LogLevel.DEBUG)
                 time.sleep(2)
                 if threadExit: break
                 continue
@@ -347,7 +352,7 @@ def filter_thread(threadId, options):
                 msg = item['_source']
                 # 通过 Cache 降低插件的处理频率
                 cache_key = '{}:{}'.format(msg['ip'], msg['port'])
-                if msg['pro'] == 'HTTP' or msg['pro'] == 'HTTPS':
+                if msg['pro'] == 'HTTP':
                     cache_key = msg['url']
 
                 cacheMsg = cache.get(cache_key)
@@ -364,6 +369,7 @@ def filter_thread(threadId, options):
 
                 msg_update = {}
                 # 按插件顺序对数据进行处理（插件顺序在配置文件中定义）
+                stime = time.time()
                 for i in sorted(plugins.keys()):
                     (pluginName, plugin) = plugins[i]
                     output('Thread {}: Plugin {} processing ...'.format(threadId, pluginName), LogLevel.DEBUG)
@@ -378,6 +384,7 @@ def filter_thread(threadId, options):
                     
                     output('Thread {}: Plugin {} completed.'.format(threadId, pluginName), LogLevel.DEBUG)
                 
+                output("Elapsed time: {}".format(time.time() - stime), LogLevel.DEBUG)
                 # 更新数据
                 msg_update['state'] = MsgState.COMPLETED
                 cache.set(cache_key, msg_update)
@@ -392,7 +399,7 @@ def filter_thread(threadId, options):
 
             # 提交到 ES
             if len(actions) > 0:
-                output('Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.DEBUG)
+                output('Thread {}: Batch update {} document.'.format(threadId, len(actions)), LogLevel.INFO)
                 output('Thread {}: {}'.format(threadId, json.dumps(actions)), LogLevel.DEBUG)
                 batch_update(es, actions)
                 actions = []
@@ -463,10 +470,10 @@ def usage():
     parser.add_option('-H', '--hosts', action='store', dest='hosts', type='string', help='Elasticsearch server address:port list, like localhost:9200,...')
     parser.add_option('-i', '--index', action='store', dest='index', type='string', default='logstash-passets', help='Elasticsearch index name')
     parser.add_option('-r', '--range', action='store', dest='range', type='int', default=15, help='Elasticsearch search time range, unit is minute, default is 15 minutes.')
-    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=10, help='Number of concurrent threads, default is 10')
+    parser.add_option('-t', '--threads', action='store', dest='threads', type='int', default=5, help='Number of concurrent threads, default is 5')
     parser.add_option('-b', '--batch-size', action='store', dest='batch_size', type='int', default=20, help='The data item number of each batch per thread, default is 20.')
     parser.add_option('-c', '--cache-size', action='store', dest='cache_size', type='int', default=1024, help='Process cache size, default is 1024.')
-    parser.add_option('-T', '--cache-ttl', action='store', dest='cache_ttl', type='int', default=600, help='Process cache time to live(TTL), default is 600 seconds.')
+    parser.add_option('-T', '--cache-ttl', action='store', dest='cache_ttl', type='int', default=120, help='Process cache time to live(TTL), default is 120 seconds.')
     parser.add_option('-m', '--mode', action='store', dest='mode', type='int', default=1, help='Work mode: 1-master, 0-slave, default is 1.')
     parser.add_option('-d', '--debug', action='store', dest='debug', type='int', default=2, help='Print debug info, 1-error, 2-warning, 3-info, 4-debug, default is 2.')
 
@@ -479,13 +486,13 @@ def usage():
         parser.error('Please specify valid thread count, the valid range is 1-50. Default is 10.')
 
     if options.batch_size < 5 or options.batch_size > 200:
-        parser.error('Please specify valid thread count, the valid range is 5-200. Default is 20.')
+        parser.error('Please specify valid batch count, the valid range is 5-200. Default is 20.')
 
     if options.cache_size < 1 or options.cache_size > 4096:
-        parser.error('Please specify valid thread count, the valid range is 1-4096. Default is 1024.')
+        parser.error('Please specify valid cache size, the valid range is 1-4096. Default is 1024.')
 
-    if options.cache_ttl < 60 or options.cache_ttl > 24 * 60 * 60:
-        parser.error('Please specify valid thread count, the valid range is 1 minutes to 1 days. Default is 600(5 minutes).')
+    if options.cache_ttl < 1 or options.cache_ttl > 24 * 60 * 60:
+        parser.error('Please specify valid cache ttl, the valid range is 1 minutes to 1 days. Default is 120(5 minutes).')
 
     if options.range <= 0 or options.range > 24 * 60:
         parser.error('Please specify valid time, format is [number]，like: 15, max is 10080(7 days).')

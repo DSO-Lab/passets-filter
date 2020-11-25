@@ -8,12 +8,9 @@ services:
     environment:
       - ELASTICSEARCH_URL=<elasticsearch-host>:9200
       - ELASTICSEARCH_INDEX=logstash-passets
-      - THREADS=20
-      - RANGE=15
+      - THREADS=5
       - BATCH_SIZE=20
       - CACHE_SIZE=1024
+      - CACHE_TTL=120
       - MODE=1
-      - DEBUG=0
-
-
-
+      - DEBUG=1
